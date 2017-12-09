@@ -1,0 +1,138 @@
+\textbf{Path 1:} \\
+Conditions:
+\begin{itemize}
+\item $\mbox{UniformityOfCellSize} \leq 3.5$
+\item \mbox{ClumpThickness} > 8.5
+\end{itemize}
+Prediction: $P(\mbox{class} 1) = 1.0$
+
+\[\quad\]
+
+\[\quad\]
+
+\textbf{Path 2:} \\
+Conditions:
+\begin{itemize}
+\item \mbox{UniformityOfCellSize} > 3.5
+\item $\mbox{MarginalAdhesion} \leq 2.5$
+\end{itemize}
+Prediction: $P(\mbox{class} 1) = 1.0$
+
+\[\quad\]
+
+\[\quad\]
+
+\textbf{Path 3:} \\
+Conditions:
+\begin{itemize}
+\item $\mbox{UniformityOfCellSize} \leq 3.5$
+\item $\mbox{ClumpThickness} \leq 8.5$
+\item \mbox{UniformityOfCellShape} > 4.5
+\end{itemize}
+Prediction: $P(\mbox{class} 1) = 1.0$
+
+\[\quad\]
+
+\[\quad\]
+
+\textbf{Path 4:} \\
+Conditions:
+\begin{itemize}
+\item \mbox{UniformityOfCellSize} > 3.5
+\item \mbox{MarginalAdhesion} > 2.5
+\item $\mbox{SingleEpithelialCellSize} \leq 1.5$
+\end{itemize}
+Prediction: $P(\mbox{class} 1) = 1.0$
+
+\[\quad\]
+
+\[\quad\]
+
+\textbf{Path 5:} \\
+Conditions:
+\begin{itemize}
+\item $\mbox{UniformityOfCellSize} \leq 3.5$
+\item $\mbox{ClumpThickness} \leq 8.5$
+\item $\mbox{UniformityOfCellShape} \leq 4.5$
+\item \mbox{Mitoses} > 7.5
+\end{itemize}
+Prediction: $P(\mbox{class} 1) = 1.0$
+
+\[\quad\]
+
+\[\quad\]
+
+\textbf{Path 6:} \\
+Conditions:
+\begin{itemize}
+\item \mbox{UniformityOfCellSize} > 3.5
+\item \mbox{MarginalAdhesion} > 2.5
+\item \mbox{SingleEpithelialCellSize} > 1.5
+\item \mbox{BlandChromatin} > 9.5
+\end{itemize}
+Prediction: $P(\mbox{class} 1) = 1.0$
+
+\[\quad\]
+
+\[\quad\]
+
+\textbf{Path 7:} \\
+Conditions:
+\begin{itemize}
+\item $\mbox{UniformityOfCellSize} \leq 3.5$
+\item $\mbox{ClumpThickness} \leq 8.5$
+\item $\mbox{UniformityOfCellShape} \leq 4.5$
+\item $\mbox{Mitoses} \leq 7.5$
+\item $\mbox{NormalNucleoli} \leq 9.0$
+\end{itemize}
+Prediction: $P(\mbox{class} 1) = 0.043$
+
+\[\quad\]
+
+\[\quad\]
+
+\textbf{Path 8:} \\
+Conditions:
+\begin{itemize}
+\item $\mbox{UniformityOfCellSize} \leq 3.5$
+\item $\mbox{ClumpThickness} \leq 8.5$
+\item $\mbox{UniformityOfCellShape} \leq 4.5$
+\item $\mbox{Mitoses} \leq 7.5$
+\item \mbox{NormalNucleoli} > 9.0
+\end{itemize}
+Prediction: $P(\mbox{class} 1) = 0.0$
+
+\[\quad\]
+
+\[\quad\]
+
+\textbf{Path 9:} \\
+Conditions:
+\begin{itemize}
+\item \mbox{UniformityOfCellSize} > 3.5
+\item \mbox{MarginalAdhesion} > 2.5
+\item \mbox{SingleEpithelialCellSize} > 1.5
+\item $\mbox{BlandChromatin} \leq 9.5$
+\item $\mbox{BareNuclei} \leq 9.5$
+\end{itemize}
+Prediction: $P(\mbox{class} 1) = 0.899$
+
+\[\quad\]
+
+\[\quad\]
+
+\textbf{Path 10:} \\
+Conditions:
+\begin{itemize}
+\item \mbox{UniformityOfCellSize} > 3.5
+\item \mbox{MarginalAdhesion} > 2.5
+\item \mbox{SingleEpithelialCellSize} > 1.5
+\item $\mbox{BlandChromatin} \leq 9.5$
+\item \mbox{BareNuclei} > 9.5
+\end{itemize}
+Prediction: $P(\mbox{class} 1) = 1.0$
+
+\[\quad\]
+
+\[\quad\]
+

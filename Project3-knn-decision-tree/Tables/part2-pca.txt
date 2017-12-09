@@ -1,0 +1,18 @@
+% PCA dimension: 5 
+
+% depth: 3
+
+% confusion matrix
+\begin{bmatrix}
+84 & 2 \\
+34 & 20
+\end{bmatrix}
+
+% metrics on test set
+\begin{tabular}{|c|c|} \hline
+Accuracy & 0.743 \\ \hline
+Recall & 0.37 \\ \hline
+Precision & 0.909 \\ \hline
+Specificity & 0.977 \\ \hline
+F-score & 0.263 \\ \hline
+\end{tabular}

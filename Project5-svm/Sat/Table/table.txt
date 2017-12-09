@@ -1,0 +1,9 @@
+\begin{tabular}{|c|c|c|c|} \hline
+Refinement & $c$ & $\gamma$ & Accuracy \\ \hline
+0 &  10.0 &  0.1 & 0.92621 \\
+1 &  6.0 &  0.1 & 0.93204 \\
+2 &  5.8 &  0.099 & 0.93301 \\
+3 &  5.7 &  0.0992 & 0.93301 \\
+test &  5.7 &  0.0992 & 0.92618 \\
+\hline
+\end{tabular}

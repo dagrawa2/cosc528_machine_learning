@@ -1,0 +1,9 @@
+\begin{tabular}{|c|c|c|c|c|} \hline
+Num. of PCs & Frac. Var. Accounted & Loss & Training Acc. & Valid. Acc. \\ \hline
+30 & 0.758 & 0.166 & 0.94 & 0.917 \\
+35 & 0.826 & 0.147 & 0.949 & 0.923 \\
+40 & 0.886 & 0.133 & 0.952 & 0.935 \\
+50 & 0.977 & 0.121 & 0.959 & 0.939 \\
+57 & 1.0 & 0.114 & 0.96 & 0.939 \\
+\hline
+\end{tabular}

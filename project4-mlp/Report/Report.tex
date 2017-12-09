@@ -1,0 +1,282 @@
+\documentclass[12pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath, amsfonts}
+\usepackage{graphicx}
+
+%\newcommand{\eps}{\epsilon}
+\newcommand{\RR}{\mathbb{R}}
+\newcommand{\softmax}{\operatorname{softmax}}
+\newcommand{\calL}{\mathcal{L}}
+%\newcommand{\Xtrain}{X_{\mbox{train}}}
+%\newcommand{\ytrain}{y_{\mbox{train}}}
+%\newcommand{\Xtest}{X_{\mbox{test}}}
+%\newcommand{\ytest}{y_{\mbox{test}}}
+\newcommand{\Xtr}{X_{\mbox{tr}}}
+\newcommand{\ytr}{y_{\mbox{tr}}}
+\newcommand{\Ytr}{Y_{\mbox{tr}}}
+\newcommand{\Xva}{X_{\mbox{va}}}
+\newcommand{\yva}{y_{\mbox{va}}}
+\newcommand{\Yva}{Y_{\mbox{va}}}
+\newcommand{\Ztr}{Z_{\mbox{tr}}}
+\newcommand{\Zva}{Z_{\mbox{va}}}
+\newcommand{\mutr}{\mu_{\mbox{tr}}}
+\newcommand{\sigtr}{\sigma_{\mbox{tr}}}
+
+\title{COSC 528 Project 4 Report \\
+Spam E-mail Classification with Neural Networks}
+\author{Devanshu Agrawal}
+\date{November 21, 2017}
+
+\begin{document}
+\maketitle
+
+\section{Summary}
+
+The objective of this project was to implement a neural network -- in particular, a multilayer perceptron -- to classify e-mails as either spam or not spam based on dozens of attributes of e-mail content such as frequencies of various words, average length of sequences of consecutive capital letters, etc. We understood the task as a binary classification problem.
+
+We implemented a neural network as a class in python 2.7 that can be trained on data with the back propagation algorithm. We experimented with different neural network architectures (i.e., number of hidden layers, number of neurons in each hidden layer etc.), output functions and losses, learning rates, and reductions of dimensionality.
+
+We found that the best architecture was one hidden layer with 11 neurons and one logistic output neuron with cross entropy loss trained on data without dimensionality reduction for 100 epochs with a learning rate of $0.01$ and an additional 20 epochs with a learning rate of $0.0001$. Our neural network achieved $94\%$ accuracy on the validation set.
+
+
+\section{Data Exploration and Preprocessing}
+
+We loaded the data file ``spambase.data'' (see the ``Given'' directory) into a pandas dataframe. The data contains 4600 rows; each row is an instance of an e-mail. The data contains 58 columns. The first 57 columns are various features of the e-mail instances such as frequencies of various words, average length of sequences of consecutive capital letters, etc. The final column contains the class labels of the instances; an instance is labeled 1 if it spam and 0 otherwise. The data has no missing values.
+
+We converted the dataframe into a numpy array. We split the array into an input set $X$ (first 57 columns) and a target set $y$ (last column) and saved these numpy arrays to disk (see ``Arrays'' directory).
+
+
+\section{Methods}
+
+\subsection{Neural Networks and Back Propagation}
+
+We give a brief overview of neural networks restricted to the context of the problem at hand. A \emph{neural network} with $L$ layers is a model $f:\RR^D\RR^Q$ of the form
+\begin{align*}
+f(x; W,b) &= z_L, \\
+z_0 &= x \\
+z_{\ell+1} &= \sigma_{\ell}(x W_{\ell}+b_{\ell}),
+\end{align*}
+where $W_{\ell}\in \RR^{p_{\ell}\times q_{\ell}}$ and $b_{\ell}\in\RR^{q_{\ell}}$ are the model parameters in the $\ell$th layer, $\sigma_{\ell}$ for $\ell < L$ is some nonlinear function that acts elementwise on vectors, and $\sigma_L$ is an output function described below.
+
+We think of $z_{\ell}$ as a vector of neuron activations. In particular, the components of $z_0=x$ are thought of as input neurons comprising the first layer of the neural network. The components of $z_{\ell}$ are hidden neurons and comprise the $\ell$th hidden layer. The components of the final activation $z_L$ are then output neurons and form the output layer of the neural network. The corresponding functions $\sigma_{\ell}$ are called activation functions. The parameters $W_{\ell}$ and $b_{\ell}$ represent weight connections between neurons and as a result are termed weights and biases respectively.
+
+We used the logistic function as the activation function for every hidden layer:
+\[ \sigma(x) = \frac{1}{1+e^{-x}}. \]
+We experimented with three different output functions: the (linear) identity function, the logistic function, and the softmax function $\softmax:\RR^n\mapsto\RR^n$ defined by
+\[ \softmax(x_1,\ldots,x_n) = \frac{1}{Z}(e^{x_1},\ldots,e^{x_n}), \]
+with $Z$ a normalization factor.
+
+We fit a neural network to training data via loss minimization. The choice of loss function depends on the output function of the network. For linear output, we use the squared error
+\[ \calL(y, \hat{y}) = \frac{1}{2}\Vert \hat{y}-y\Vert^2, \]
+where $\hat{y}$ is the model prediction. For logistic output of one dimension (i.e., a single output neuron), we use the cross entropy
+\[ \calL(y, \hat{y}) = -y\log\hat{y}-(1-y)\log(1-\hat{y}). \]
+For softmax output, we use entropy
+\[ \calL(y, \hat{y}) = -y\cdot \log\hat{y}, \]
+where the logarithm is evaluated element-wise.
+
+A common method to minimize the loss of a neural network is stochastic gradient descent via the \emph{back propagation algorithm}. Model training consists of iterative phases called epochs. In each epoch, the training data is first randomly shuffled. Then for each training instance $x$, the gradient of the loss with respect to the weights and biases are computed. The weights and biases are then adjusted by a small amount in the direction of steepest loss descent as given by the negative gradient:
+\begin{align*}
+\Delta W_{\ell} &= -\eta \frac{\partial L(y, f(x; W,b)}{\partial W_{\ell}} \\
+\Delta b_{\ell} &= -\eta \frac{\partial L(y, f(x; W,b)}{\partial b_{\ell}},
+\end{align*}
+where $\eta$ is a small number called the learning rate. The gradients are calculated in two phases: In the first phase-- the forward phase, we evaluate the neural network on the training instance $x$. We save all the activations $z_{\ell}$ produced during the forward pass. In the second phase-- the backward pass, we evaluate the error in model prediction from the forward pass and ``propagate'' the error back to each layer; this process is captured in the ``delta rule''. These backward activations can then be combined with the forward activations $z_{\ell}$ to obtain the desired gradients.
+
+
+\subsection{Code Implementation}
+
+We implemented our neural network as a class in python 2.7 with heavy use of the numpy module. The class constructor accepts the following arguments:
+\begin{enumerate}
+\item A list of integers specifying the number of neurons in each layer-- from input layer to output layer.
+\item A list of activation functions for each layer other than the input layer. A choice of two activation functions is available for the hidden layers-- the logistic function and the rectified linear function. We use only the former for this project. The final activation function in the list is taken to be the output function and must be one of linear, logistic, or softmax.
+\item A learning rate $\eta$.
+\item A mini-batch size. For this project, we use only the value $1$, which implements stochastic gradient descent.
+\item A state for the numpy random seed.
+\end{enumerate}
+The constructor builds a list of derivatives of the activation functions in the hidden layers, and it also initializes the weight matrices and bias vectors with random values between $-0.01$ and $0.01$.
+
+The ``predict'' method simply evaluates the neural network on the argument provided. The argument can be a matrix, and the neural network will act on each row in parallel. The ``forward'' method implements the forward pass in each iteration during training. This is identical to the ``predict'' method except the activations $z_{\ell}$ from each layer are stored and returned in a list.
+
+The ``backward'' method implements the backward pass that is run in each iteration of training. This method computes the prediction error from the last forward pass and propagates this error back through the network. The backward activations are then used to compute the loss gradient, and this is in turn used to update the weights and biases by one step.
+
+The ``train'' method accepts as its argument the training set, validation set, and the number of training epochs. At the start of each epoch, the training set is shuffled. Then for each training instance, the ``forward'' and ``backward'' methods are called. Performance metrics (including loss, training accuracy, validation accuracy, and execution time) are printed after each epoch.
+
+
+\subsection{Cross Validation}
+
+We used cross validation to perform model selection. To do this, we randomly split the data $(X, y)$ into a training set $(\Xtr, \ytr)$ (75\%) and validation set $(\Xva, \yva)$ (25\%).
+
+We standardized the data as follows: Let $\mutr$ and $\sigtr$ be the mean and standard deviation of the training input set $\Xtr$ respectively. Here $\mutr$ and $\sigtr$ are row vectors that are permitted to be broadcasted along their first dimensions. Then we redefine $\Xtr$ and $\Xva$ as
+\begin{align*}
+\Xtr &\equiv \frac{(\Xtr-\mutr}{\sigtr} \\
+\Xva &\equiv \frac{\Xva-\mutr}{\sigtr}.
+\end{align*}
+Observe that we standardized the validation set using the mean and standard deviation of the training set. We did this because we think of the validation set as ``future data'' that is not available during training.
+
+\subsection{Dimensionality Reduction}
+\label{methods-pca}
+
+We ran our experiments both with and without dimensionality reduction. In the case of the former, we used principal components analysis (PCA) to perform dimensionality reduction. Let $P_d$ be an $n$-column projection matrix such that
+\[ \Ztr = \Xtr P_d \]
+is the projection of the training input set onto its first $d$ principal components. Then we also define
+\[ \Zva = \Xva P_d. \]
+Observe that we project the validation input set onto the first $d$ principal components of the training input set. We discuss the results obtained for various values of $n$ in Section \ref{results-pca}.
+
+
+\section{Results}
+
+\subsection{Optimal Architecture}
+
+We first considered the data without dimensionality reduction. Our goal was to use cross validation to determine the optimal model hyperparameters. We first assumed that one hidden layer would be sufficient and planned to test additional layers later. Because the problem at hand is a binary classification problem, then we chose to have one output neuron with logistic output; thus, the output can be interpreted as the probability that the input belongs to class 1. We used cross entropy as the loss as it is the most appropriate choice for logistic output. The only hyperparameters that needed to be optimized were then the learning rate $\eta$ and the number of hidden neurons $h$.
+
+The neural network has 57 input neurons (one for each feature in the training input set). We therefore chose $h=20$ hidden neurons as the initial architecture; we thought this was a resonable starting number as it is about a third of the input dimension and therefore provides some compression while still allowing enough ``room'' for data fitting. We started with a learning rate of $\eta=0.01$. We trained the neural network for 100 epochs and monitored the loss (averaged over all training instances), accuracy on the training set, and accuracy on the validation set. We found that these metrics were beginning to plateau near the end of training but exhibited some instability in the form of fluctuations. We therefore trained the network for an additional 20 epochs with a learning rate $\eta=0.0001$ (since we found that $\eta=0.001$ did not help). This resulted in a clean plateau of all metrics. In fact, we applied this training strategy -- 100 epochs with $\eta=0.01$ and 20 epochs with $\eta=0.0001$ -- in all of our experiments and found that it indeed led to convergence of all metrics monitored.
+
+We ran experiments for various numbers of hidden neurons. We present training time performance metrics only for the cases of $h=1,5,11$, and $20$ hidden neurons (Figures \ref{plot-h1}-\ref{plot-h20}). In addition, we present the final (i.e., converged) losses and accuracies for the cases of $h=1,5,10,11,12,20$ and $40$ hidden neurons (Table \ref{table1}).
+
+\begin{figure}
+\centering
+\includegraphics[width=6in]{../Plots/plot-h1.png}
+\caption{\label{plot-h1} Plot of the training loss (black), training accuracy (blue), and validation accuracy (red) over 120 epochs of training with $h=1$ hidden neuron. Epochs 11-120 are plotted separately (right) to accomodate additional detail. A learning rate of $\eta=0.01$ was used for epochs $1-100$ (left of dashed line) and $eta=0.0001$ was used for epochs $101-120$ (right of dashed line).}
+\end{figure}
+
+\begin{figure}
+\centering
+\includegraphics[width=6in]{../Plots/plot-h5.png}
+\caption{\label{plot-h5} Plot of the training loss (black), training accuracy (blue), and validation accuracy (red) over 120 epochs of training with $h=5$ hidden neurons. Epochs 11-120 are plotted separately (right) to accomodate additional detail. A learning rate of $\eta=0.01$ was used for epochs $1-100$ (left of dashed line) and $eta=0.0001$ was used for epochs $101-120$ (right of dashed line).}
+\end{figure}
+
+\begin{figure}
+\centering
+\includegraphics[width=6in]{../Plots/plot-h11.png}
+\caption{\label{plot-h11} Plot of the training loss (black), training accuracy (blue), and validation accuracy (red) over 120 epochs of training with $h=11$ hidden neurons. Epochs 11-120 are plotted separately (right) to accomodate additional detail. A learning rate of $\eta=0.01$ was used for epochs $1-100$ (left of dashed line) and $eta=0.0001$ was used for epochs $101-120$ (right of dashed line).}
+\end{figure}
+
+\begin{figure}
+\centering
+\includegraphics[width=6in]{../Plots/plot-h20.png}
+\caption{\label{plot-h20} Plot of the training loss (black), training accuracy (blue), and validation accuracy (red) over 120 epochs of training with $h=20$ hidden neurons. Epochs 11-120 are plotted separately (right) to accomodate additional detail. A learning rate of $\eta=0.01$ was used for epochs $1-100$ (left of dashed line) and $eta=0.0001$ was used for epochs $101-120$ (right of dashed line).}
+\end{figure}
+
+\begin{table}
+\centering
+\begin{tabular}{|c|c|c|c|} \hline
+Hidden Neurons & Loss & Training Acc. & Valid. Acc. \\ \hline
+1 & 0.181 & 0.938 & 0.933 \\
+5 & 0.13 & 0.953 & 0.937 \\
+10 & 0.114 & 0.961 & 0.935 \\
+11 & 0.108 & 0.963 & 0.941 \\
+12 & 0.111 & 0.959 & 0.935 \\
+20 & 0.109 & 0.964 & 0.937 \\
+40 & 0.11 & 0.961 & 0.938 \\
+ \hline
+\end{tabular}
+\caption{\label{table1} Final (i.e., converged) training loss, training accuracy, and validation accuracy for various numbers of hidden neurons $h$.}
+\end{table}
+
+With $h=1$ hidden neuron, the neural network achieved a validation accuracy of $93.3\%$; this is the lowest validation accuracy achieved for this set of experiments, but it is not significantly worse than those achieved by the other architectures (Table \ref{table1}). But the final loss with $h=1$ hidden neuron is clearly greater than the loss achieved by all other architectures. Moreover, training is not smooth as indicated by the fluctuations in loss and accuracy (Figure \ref{plot-h1}).
+
+With $h=5$ hidden neurons, training is smoother and a lower loss is achieved (Figure \ref{plot-h5}). With $h=11$ hidden neurons, training is even smoother and the final loss again drops (Figure \ref{plot-h11}). The validation accuracy crosses $94\%$ for the first time. Additional hidden neurons do not lead to significant changes; using $h=20$ hidden neurons leads to training as smooth as with $h=11$ hidden neurons (Figure \ref{plot-h20}). As a matter of fact, $h=20$ and $h=40$ result in validation accuracies less than $94\%$ (Table \ref{table1}).
+
+Therefore, $h=11$ hidden neurons appears to give the best performance so far. We compared $h=11$ hidden neurons to the cases of $h=10$ and $h=12$ hidden neurons to see if $h=11$ is in fact the best architecture. But out of these three, only the case of $h=11$ hidden neurons was able to achieve at least $94\%$ accuracy on the validation set (Table \ref{table1}). We therefore concluded that $h=11$ was the optimal width of the hidden layer.
+
+We tested our neural network with a second hidden layer to see if it would improve performance. The first hidden layer still had $h=11$ hidden neurons, and we used $5$ neurons in the second hidden layer-- about half the width of the first hidden layer. We obtained the following loss and accuracies:
+
+\begin{center}
+\begin{tabular}{|c|c|c|} \hline
+Loss & Training Acc. & Valid. Acc. \\ \hline
+0.118 & 0.959 & 0.941 \\
+\hline
+\end{tabular}
+\end{center}
+
+Interestingly, the neural network with two hidden layers achieved the same validation accuracy ($94.1\%$) as with one hidden layer with $h=11$ neurons despite its greater loss and lower training accuracy. This indicates the addition of a second hidden layer improved generalization. But since the second hidden layer did not result in an improved validation accuracy, then we conclude that using one hidden layer is better as it represents a simpler model (i.e., fewer parameters).
+
+
+\subsection{Linear and Softmax Outputs}
+
+The above experiments were conducted with one logistic output neuron. But we also tried linear and softmax output functions to see if we could attain better performance. We tested our neural network with $h=11$ hidden neurons and one linear output neuron, and we used squared error as the loss function. Unlike linear output, the softmax function outputs a probability distribution over class labels. Applying softmax to our binary classification problem therefore requires that our neural network has two output neurons, and it requires that the target vectors $\ytr$ and $\yva$ be encoded as two-column matrices $\Ytr$ and $\Yva$ respectively, where the class label 0 is encoded as the row $[1,0]$ and the class label 1 is encoded as the row $[0,1]$. For softmax, we use entropy as the loss function.
+
+We recorded the final training and validation accuracies obtained from each of the three output functions (Table \ref{table2}). We did not report the loss as the output functions correspond to different loss functions that cannot be compared.
+
+\begin{table}
+\centering
+\begin{tabular}{|c|c|c|} \hline
+Output Func. & Training Acc. & Valid. Acc. \\ \hline
+linear & 0.94 & 0.918 \\
+logistic & 0.963 & 0.941 \\
+softmax & 0.968 & 0.94 \\
+\hline
+\end{tabular}
+\caption{\label{table2} Final (i.e., converged) training and validation accuracies obtained with $h=11$ hidden neurons for three different output functions.}
+\end{table}
+
+We see that logistic and softmax output result in comparable accuracies (about $94\%$ on the validation set) and both perform better than linear output (Table \ref{table2}). This agrees with our intuition as logistic output is well-suited for binary classification problems and softmax output is well-suited for multi-class problems (including two classes) while linear output is better suited for (real-valued) regression problems. Geometrically, logistic and softmax outputs produce more precise classifications (either 0 or 1) for input points further from the learned decision boundary. But linear output returns a value that is proportional to the distance from the decision boundary; this is ill-suited for classification problems where points on the same side of the decision boundary have the same (class) value regardless of their distance from the boundary.
+
+Between logistic output and softmax output, we prefer logistic output as it is the simpler model; it requires only one output neuron and hence fewer parameters.
+
+
+\subsection{Additional Metrics}
+\label{results-metrics}
+
+We conclude that a neural network with one hidden layer with $h=11$ neurons and one logistic output neuron with cross-entropy loss trained for 100 epochs with a learning rate of $\eta=0.01$ and an additional 20 epochs with a learning rate $\eta=0.0001$ is the optimal architecture for the non-dimensionally reduced data. We therefore provide additional performance metrics for this architecture.
+
+The confusion matrix of the neural network on the validation set is
+\[ \begin{bmatrix}
+697 & 37 \\
+31 & 385
+\end{bmatrix}. \]
+We used this confusion matrix to calculate several metrics that assess the performance of the neural network on the validation set (Table \ref{table3}).
+
+\begin{table}
+\centering
+\begin{tabular}{|c|c|} \hline
+Metric & Value \\ \hline
+Accuracy & 0.941 \\
+Recall & 0.925 \\
+Precision & 0.912 \\
+Specificity & 0.95 \\
+F-score & 0.459 \\
+\hline
+\end{tabular}
+\caption{\label{table3} Various metrics of performance for the neural network with optimal architecture on the validation set.}
+\end{table}
+
+
+\section{With Dimensionality Reduction}
+\label{results-pca}
+
+We performed PCA on the training input set $\Xtr$ and constructed the reduced training and validation sets $(\Ztr, \ytr)$ and $(\Zva, \yva)$ as described in Section \ref{methods-pca}. We plotted the fraction of variance in the data $\Xtr$ that is explained by its first $d$ principal components and found that the variance is fairly distributed over most of the components (Figure \ref{plot-pca}).
+
+\begin{figure}
+\centering
+\includegraphics[width=4in]{../Plots/plot-pca.png}
+\caption{\label{plot-pca} Fraction of variance in the training input set $\Xtr$ that is explained by its first $d$ principal components.}
+\end{figure}
+
+We see that at least 30 principal components are needed to explain 75\% of the variance in the data. We therefore tested our neural network on the reduced data for only $d\geq 30$ principal components. We used the optimal architecture described in Section \ref{results-metrics}; the only difference is that the number of input neurons is not 57 but instead $d$-- the dimensionality of the reduced input data. We report the final loss and accuracies attained for some select values of $d$ (Table \ref{table4}).
+
+\begin{table}
+\centering
+\begin{tabular}{|c|c|c|c|c|} \hline
+Num. of PCs & Frac. Var. Accounted & Loss & Training Acc. & Valid. Acc. \\ \hline
+30 & 0.758 & 0.166 & 0.94 & 0.917 \\
+35 & 0.826 & 0.147 & 0.949 & 0.923 \\
+40 & 0.886 & 0.133 & 0.952 & 0.935 \\
+50 & 0.977 & 0.121 & 0.959 & 0.939 \\
+57 & 1.0 & 0.114 & 0.96 & 0.939 \\
+\hline
+\end{tabular}
+\caption{\label{table4} Final (i.e., converged) loss and accuracies of the optimal neural network trained on the reduced data of dimension $d$ for select values of $d$ (i.e., number of principal components used).}
+\end{table}
+
+Exactly how many components are necessary depends on the accuracy desired. We see that 50 principal components are necessary to achieve a validation accuracy very near to $94\%$. But 50 components is almost the entire data and offers little advantage. We conclude that because the variance is not captured by only a few principal components, then PCA does not lead to useful dimensionality reduction; in other words, significant dimensionality reduction comes at the price of significant loss in accuracy.
+
+
+\section{Discussion}
+
+We conclude that the best neural network for spam e-mail classification has an architecture with 57 input neurons (i.e., no dimensionality reduction), 11 hidden neurons in a single layer, and one logistic output neuron with cross entropy as the loss function. The network should be trained for 100 epochs with a learning rate of $0.01$ and then an additional 20 epochs with a learning rate of $0.0001$ to guarantee convergence. This neural network achieves $94.1\%$ accuracy on the validation set ($25\%$ of the original data).
+
+Our neural network is not sensitive to the number of hidden neurons. For example, the neural network achieves a validation accuracy of $93.3\%$ with only one hidden neuron. This suggests that the data is close to linearly separable. Therefore, there exists one dimension along which most of the data can be classified correctly. On the other hand, there is no principal component of the data that captures the majority of variance. Thus, the dimension along which most of the classification is performed is not one of the principal components.
+
+Future directions include experimentation with $L_2$ regularization to see if we can achieve better generalization on the validation set; our neural network achieves almost $97\%$ accuracy on the training set but only $94\%$ accuracy on the validation set. In addition, we plan to see if we can speed up convergence with mini-batch learning and momentum.
+
+\end{document}

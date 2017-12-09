@@ -1,0 +1,14 @@
+% confusion matrix
+\begin{bmatrix}
+697 & 37 \\
+31 & 385
+\end{bmatrix}
+
+% metrics on test set
+\begin{tabular}{|c|c|} \hline
+Accuracy & 0.941 \\ \hline
+Recall & 0.925 \\ \hline
+Precision & 0.912 \\ \hline
+Specificity & 0.95 \\ \hline
+F-score & 0.459 \\ \hline
+\end{tabular}

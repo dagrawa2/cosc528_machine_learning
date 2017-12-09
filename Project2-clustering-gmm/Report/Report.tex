@@ -1,0 +1,303 @@
+\documentclass[12pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath, amsfonts}
+\usepackage{graphicx}
+
+\newcommand{\RR}{\mathbb{R}}
+\newcommand{\eps}{\varepsilon}
+\newcommand{\argmin}{\operatorname{argmin}}
+\newcommand{\argmax}{\operatorname{argmax}}
+
+\title{COSC 528 Project 2 Report \\
+Dimensionality Reduction and Clustering }
+\author{Devanshu Agrawal}
+\date{October 23, 2017}
+
+\begin{document}
+\maketitle
+
+\section{Summary}
+
+Our objective in this project was to cluster countries together based on similar yearly mortality rates of children under the age of five for years 1800-2015; thus, countries that are clustered together are interpreted to have exhibited similar mortality rate patterns since 1800. We applied and compared two different clustering algorithms: 1) $K$-means clustering (KMC) and 2) a Gaussian mixture model (GMM) implemented using the expectation-maximization (EM) algorithm.
+
+We also performed principal components analysis (PCA) to reduce the dimensionality of the data; this leads to faster execution time and also allows for simpler visualization.
+
+Specifically, we perform both KMC and a GMM on three versions of the data:
+\begin{enumerate}
+\item $X$: the entire (preprocessed) data set.
+\item $Z$: a low-dimensional projection of the data that captures most of the structure of the original data.
+\item $Z_{2D}$: a two-dimensional projection of the data.
+\end{enumerate}
+We coded each implementation in python 2.7. We made heavy use of the numpy module to produce fast and highly parallelized code.
+
+We found that the countries fall most naturally into six clusters. Our most interesting finding was that countries that are geographically near to one another tend to be clustered together.
+
+
+\section{Data Exploration and Preprocessing}
+
+The data consists of countries (rows) and years (columns). For each country is listed the under-five childhood mortality rates (per 1000 births) for years 1800-2015. We think of the countries as individual observations and the years as features.
+
+
+We read the .csv file provided into a pandas dataframe. The resulting dataframe had 999 rows and 227 columns. We removed all empty rows and empty columns; we also removed all countries for which there was no data. We then found that the dataframe still had 27 countries with some missing values. Each of these 27 countries was missing over 70\% of its data entries. We believed that imputation of these missing values would during clustering produce an artifactual cluster near the mean of the data. we therefore felt it more appropriate to removed these 27 countries from the dataframe. The final dataframe had 184 rows (countries) and 216 columns (years) with no missing values.
+
+We stripped the data of its row and column labels. We stored the country names and years in two lists and saved the lists to disk as python pickled objects (see ``Lists/countries.list'' and ``List/years.list''). We converted the data itself into a numpy array of size $184\times 216$, and we $z$-standardized each column. We then saved the standardized data matrix $X$ to disk (see ``Arrays/X.npy'').
+
+
+\section{Dimensionality Reduction}
+
+\subsection{Implementation}
+
+We used PCA to approximate the data $X$ with lower-dimensional data $Z$ (fewer columns) that still captures most of the variance present in the data (see ``paart1.py''). Since $X$ is zero-centered, then its covariance matrix is $X^\top X$. Each eigenvalue of $X^\top X$ is thus a variance of the data in the direction defined by the associated (normalized) eigenvector. Our goal in PCA is to approximate $X$ using only enough eigenvectors sufficient to capture most of the total variance.
+
+The eigenvalues of $X^\top X$ are just the squared singular values of $X$. The singular value decomposition of $X\in\mathbb{R}^{N\times D}$ is
+\[ X = U S V^\top, \]
+where $U\in\mathbb{R}^{N\times N}$ and $V\in\mathbb{R}^{D\times D}$ are unitary and $S\in\mathbb{R}^{N\times D}$ has the singular values $s_1\geq s_2\geq\ldots \geq s_D$ of $X$ along its main diagonal and $0$ for all other entries. The eigenvalues of $X^\top X$ are $s_i^2$ with the $i$th column of $V$ as the associated eigenvector.
+
+Our goal was to find the smallest number of principal components $d$ that capture at least 90\% of the variance of the data:
+\[ \frac{s_1^2+s_2^2+\ldots +s_d^2}{s_1^2+s_2^2+\ldots s_D^2} \geq 0.9. \]
+The projection matrix $W$ that projects the rows of the data matrix $X$ onto the subspace spanned by the first $d$ principal components is formed from the first $d$ columns of $V$:
+\[ W = V[0:D, 0:d] \in \mathbb{R}^{D\times d}. \]
+The (dimensionally) reduced data matrix is then
+\[ Z = X W. \]
+
+\subsection{Results}
+
+We applied PCA to the standardized data $X$ loaded from ``Arrays/X.npy''. We constructed a scree plot of its first ten singular values (Figure \ref{scree}) as well as the fraction of total variance that the first $d$ principal components were able to explain (Figure \ref{variance}. It is easy to see that the first three principal components account for about 91.8\% of total variance. We therefore defined the projection matrix $W$ as the first three columns of $V$ (with $V$ the second unitary matrix in the SVD of $X$), and we defined $Z$ to be the projection of $X$ onto the first three principal components:
+\[ Z = X W = X V[:, :3] \]
+We saved both $Z$ and $W$ to disk as numpy arrays (see ``Arrays/Z.npy'' and ``Arrays/W.npy'').
+
+The first two principal components capture over 86.3\% of the total variance. The scatter plot of the reduced data $Z$ projected onto the first two principal components therefore gives a decent visualization of the data distribution (Figure \ref{scatter}). This projection is achieved by dropping the third column of $W$ or equivalently dropping the third column of $Z$; i.e., the projection of $Z$ onto the first two principal components results in the data
+\[ Z_{2D} = Z[:, :2]. \]
+
+\begin{figure}
+\centering
+\includegraphics[height=3in]{../Plots/scree.png}
+\caption{\label{scree} Plot of the first ten (out of 216) singular values of the data matrix $X$.}
+\end{figure}
+
+\begin{figure}
+\centering
+\includegraphics[height=3in]{../Plots/variance.png}
+\caption{\label{variance} Percentage of variance of the data $X$ captured by the first $d$ principal components of $X$.}
+\end{figure}
+
+\begin{figure}
+\centering
+\includegraphics[height=3in]{../Plots/scatter.png}
+\caption{\label{scatter} Plot of the data $X$ projected onto its first two principal components; equivalently, plot of the data $Z_{2D}$.}
+\end{figure}
+
+\section{$K$-Means Clustering}
+
+\subsection{Implementation}
+
+The goal of KMC is to group the rows of a given data matrix $X\in\mathbb{R}^{N\times D}$ into $K$ clusters. The end result of KMC is a matrix $\mu\in \mathbb{R}^{K\times D}$ whose $k$th row $\mu_k$ is the mean of cluster $k$. The cluster membership of a point $x\in\RR^D$ is then given by
+\[ \operatorname{cluster}(x) = \argmin_{1\leq k\leq K} \lvert x-\mu_k\rvert, \]
+where $\lvert\cdot\rvert$ is the Euclidean norm. We also think of KMC as a method for data compression; in principle, a point $x$ in cluster $k$ can be compressed to the cluster mean $\mu_k$ with minimal loss of information.
+
+We implemented KMC as a python object class (see ``algos.py''). The class initializer accepts the number of clusters $K$ to be assumed and returns an instance of a KMC model to be trained. The ``train'' method excepts a data matrix $X$ and finds $\mu$. The cluster means $\mu_k$ are initialized to a random subset of $K$ data points from $X$. Training converges once cluster memberships cease to change. The number of iterations needed for convergence is recorded as a class attribute.
+
+The KMC class object also includes the following attributes that give insight into the cluster structure:
+\begin{enumerate}
+\item Compressed variance: This is the variance of the data but with all data points replaced with their compressions. If $\overline{x}$ is the mean of the rows of $X$ and $x_i$ is the $i$th row of $X$, then
+\[ \mbox{compressed variance } = \frac{1}{N-1}\sum_{i=1}^N \lvert \mbox{compressed}(x_i)-\overline{x}\rvert^2, \]
+where $\mbox{compressed}(x_i)$ is the mean of the cluster to which $x_i$ belongs. This attribute measures the degree to which the clustered data preserves the structure of the original data.
+\item Intracluster distance: This is the root mean square (RMS) of distances between every pair of points in a given cluster. If $x_i^k$ is the $i$th point in cluster $k$, then
+\[ \mbox{intracluster distance } = \sqrt{\frac{1}{N_k(N_k-1)}\sum_{i,j=1}^{N_k}\lvert x_i-x_j\rvert^2}, \]
+where $N_k$ is the number of points in cluster $k$. It can be shown that this is equivalent to the standard deviation in cluster $k$:
+\[ \mbox{intracluster distance } = \sqrt{\frac{1}{N_k-1}\sum_{i=1}^{N_k}\lvert x_i^k-\mu_k\rvert^2}. \]
+This measures the lack of compactness of a cluster.
+\item Intercluster distance: We define the distance between two clusters to be the Euclidean distance between their means.
+\item Dunn index: This is defined as
+\[ \mbox{Dunn index } = \frac{\mbox{min intercluster distance}}{\mbox{max intracluster distance}}. \]
+A large Dunn index is desirable as it indicates compact and well-separated clusters.
+\end{enumerate}
+
+\subsection{Finding the optimal $K$}
+
+KMC requires that we specify the number of clusters $K$ into which thee data will be grouped. We selected $K$ by applying KMC to the reduced $Z$ (three principal components) and recording the compressed variance for various values of $K$. The compressed variance expressed as a percentage of the total variance of $Z$ increases with $K$ (Figure \ref{compressed-variance}). This was expected; in the extreme case that $K$ is set to the cardinality of the data, compressed variance equals the (uncompressed variance) sinc every point is its own compression. The key, however, is to find the value of $K$ around which the compressed variance begins to plateau; more clusters then add little additional compression power and are therefore unnecessary. Moreover, compression must be balanced with faithful reconstruction of the uncompressed data (see ``part2-optimize-K.py'').
+
+We selected the value of $K=6$ clusters based on where we believed compressed variance was beginning to plateau (Figure \ref{compressed-variance}). We also found that $K=6$ clusters produces the most reasonable structure visually as well as the most intuitive results-- keeping in mind the context of the problem (see Conclusions).
+
+\begin{figure}
+\centering
+\includegraphics[height=3in]{../Plots/compressed-variance.png}
+\caption{\label{compressed-variance} Plot of the compressed variance of the reduced data $Z$ after KMC expressed as a percentage of the total variance of $Z$.}
+\end{figure}
+
+\subsection{Results}
+
+We applied KMC to the non-reduced data $X$, the reduced data $Z$ (three principal components), and the 2D data $Z_{2D}$ (two principal components). We used $K=6$ clusters (see ``part2-KMC-X.py'', ``part2-KMC-Z.py'', ``part2-KMC-Z2D.py'').
+
+We recorded various attributes of the clustered data that provided information about the cluster structure (Table \ref{KMC-table}). We also recorded the cluster membership of each data point. To visualize the clusters, we projected the data sets into two dimensions using the maps:
+\begin{align*}
+X &\rightarrow X W[:, :2] \\
+Z &\rightarrow Z[:, :2] \\
+Z_{2D} &\rightarrow Z_{2D}.
+\end{align*}
+we produced scatter plots of each of the three projected data sets with distinct colors assigned to each of the six clusters of points (Figures \ref{KMC-X}-\ref{KMC-Z2D}).
+
+Recall that each plotted point represents a country. Countries that are clustered together are therefore interpreted to exhibit similar childhood mortality rate trends. While the scatter plots give insight into the clustered structure of the data, they do not tell us which countries are grouped together. Therefore, we also recorded the countries contained in each cluster. These lists can be found in the directories ``Clusters/KMC/X'', ``Clusters/KMC/Z'', and ``Clusters/KMC/Z2D''.
+
+\begin{table}
+\centering
+\begin{tabular}{|c|c|c|c|} \hline
+\quad & $X$ & $Z$ & $Z_{2D}$ \\ \hline
+iterations & 12 & 9 & 8 \\ \hline
+compressed var. & 0.7646 & 0.8681 & 0.8848 \\ \hline
+max intracluster dist. & 8.5278 & 1.0204 & 0.8504 \\ \hline
+min intercluster dist. & 11.2481 & 1.0276 & 0.9192 \\ \hline
+Dunn index & 1.319 & 1.0071 & 1.0809 \\ \hline
+\end{tabular}
+\caption{\label{KMC-table} Various attributes of the clustered data resulting from KMC.}
+\end{table}
+
+\begin{figure}
+\centering
+\includegraphics[height=3in]{../Clusters/KMC/X/plot.png}
+\caption{\label{KMC-X} Plot of the data $X$ clustered with KMC and projected onto its first two principal components.}
+\end{figure}
+
+\begin{figure}
+\centering
+\includegraphics[height=3in]{../Clusters/KMC/Z/plot.png}
+\caption{\label{KMC-Z} Plot of the reduced data $Z$ clustered with KMC and projected onto its first two components.}
+\end{figure}
+
+\begin{figure}
+\centering
+\includegraphics[height=3in]{../Clusters/KMC/Z2D/plot.png}
+\caption{\label{KMC-Z2D} Plot of the 2D data $Z_{2D}$ clustered with KMC.}
+\end{figure}
+
+\section{Gaussian Mixture Model}
+
+\subsection{Implementation}
+
+A GMM assumes that every cluster of data points follows a normal distribution. Our goal then is to learn the parameters $\mathbf{\pi}\in\mathbb{R}^K$, $\mu\in\mathbb{R}^{K\times D}$, and $\Sigma\in\mathbb{R}^{K\times D\times D}$ where $K$ clusters are assumed, $D$ is the dimension of the feature space, and:
+\begin{enumerate}
+\item The $k$th element $\pi_k$ of $\mathbf{\pi}$ is the prior probability that a randomly selected point $x\in\RR^D$ belongs to cluster $k$.
+\item The $k$th row $\mu_k$ of $\mu$ is the mean of cluster $k$.
+\item The order-3 tensor $\Sigma$ has elements $\Sigma_{kij}$ where $\Sigma_{kij}$ is the $(i,j)$ element of the covariance matrix $\Sigma_k$ of cluster $k$.
+\end{enumerate}
+
+We implemented the model as a python object class (see ``algos.py''). The initializer of the class takes as argument the number of clusters $K$ to be used and returns an instance of a GMM to be trained. The ``train'' method executes the EM algorithm to fit a GMM to a given data set $X$. The first phase of training is to perform KMC on $X$. This provides us with initial cluster memberships of the data. The prior $\pi_k$ is then initialized to the fraction of data belonging to cluster $k$ (according to KMC). Likewise, the mean $\mu_k$ and covariance $\Sigma_k$ are initialized to the empirical mean and covariance of cluster $k$ respectively. In each iteration of the EM algorithm, we compute for each data point $x$ the probability $p_k(x)$ that $x$ is generated by cluster $k$:
+\[ p_k(x) = A \mathcal{N}(x; \mu_k, \Sigma_k)\pi_k, \]
+where $A$ is chosen so that $p_1(x)+\cdots +p_K(x)=1$. Therefore, $(p_1(x),\ldots,p_K(x))$ is a probability distribution over cluster memberships of $x$; we think of this as giving a soft cluster membership of $x$. We use the soft cluster memberships of the data as weights to compute expected updates of the parameters $\mathbf{\pi}$, $\mu$, and $\Sigma$. The EM algorithm terminates once the expected log-likelihood of the data given soft cluster memberships increases less than a set tolerance $\eps = 10^{-9}$.
+
+As with KMC, we record the number of iterations needed for the EM algorithm to converge (not including the KMC iterations run at the start of training). We also record the same attributes to describe the clustered data as we did for KMC:
+\begin{enumerate}
+\item Compressed variance: This is the variance in the data but with all points replaced by cluster means. Since the compression of a point is now probabilistic, then we define the weighted variance:
+\[ \mbox{compressed variance} = \sum_{k=1}^K w_k \lvert\mu_k-\overline{x}\rvert^2, \]
+where $\overline{x}$ is the mean of the uncompressed data $X$ and the weight $w_k$ is the expected fraction of data points that belong to cluster $k$:
+\[ w_k = \frac{1}{N}\sum_{i=1}^N p_k(x_i), \]
+with $x_i$ the $i$th row of $X$.
+\item Intracluster distance: As with KMC, this is equivalent to the standard deviation of a cluster. Since we know the covariance of cluster $k$ to be $\Sigma_k$, then we have:
+\[ \mbox{intracluster distance} = \sqrt{\operatorname{tr}(\Sigma_k)}. \]
+\item Intercluster distance: This is simply the Euclidean distance between cluster means as in KMC.
+\item Dunn index: This is also defined as in KMC.
+\end{enumerate}
+
+\subsection{Handling Ill-Conditioned Covariances}
+\label{section-errors}
+
+The GMM described above requires the implementation and evaluation of the Gaussians:
+\[ \mathcal{N}(x; \mu_k, \Sigma_k) = \frac{1}{(2\pi)^{\frac{D}{2}}\operatorname{det}(\Sigma_k)^{\frac{1}{2}}}\exp\left[-\frac{1}{2}(x-\mu_k)^\top\Sigma_k^{-1}(x-\mu)\right],
+\quad (k=1,\ldots,K), \]
+where $D$ is the dimension of feature space. This requires an inversion of the covariance matrix $\Sigma_k$ as well as division by its determinant. A singular or ill-conditioned covariance matrix can therefore lead to overflow errors in the exponential or ``division by zero'' errors.
+
+Geometrically, an ill-conditioned covariance matrix means that the Gaussian has very small variance (and is hence very narrow) in the direction of at least one eigenvector of the covariance matrix. The normalization condition then forces the Gaussian to reach very large values near its mean. This leads to computational instability.
+
+We encountered both overflow and ``division by zero'' errors while training our GMM for exactly the reasons described above. But we successfully resolved these errors by introducing two approximations as optional flags in the GMM ``train'' method. The first optional approximation was to add a small positive offset to the covariance matrix:
+\[ \Sigma_k \rightarrow \Sigma_k+\alpha I, \]
+where $I$ is the identity matrix and $\alpha > 0$ is small. By the Spectral Theorem, this is equivalent to adding $\alpha$ to each eigenvalue $\lambda_i$ of $\Sigma_k$. Since the determinant of a matrix is the product of its eigenvalues, then the offset by $\alpha$ leads to the transformation:
+\[ \operatorname{det}(\Sigma_k) = \prod_{i=1}^D \lambda_i
+\rightarrow \prod_{i=1}^D (\lambda_i+\alpha). \]
+This is often sufficient to obtain a well-conditioned covariance matrix. Geometrically, this amounts to ensuring that the Gaussian maintains an open pocket of some minimal radius.
+
+The above approximation was successful on the reduced data $Z$ and on the 2D data $Z_{2D}$ with an offset $\alpha=0.1$ but failed on the non-reduced data $X$. This is because unlike $Z$ and $Z_{2D}$ -- which only have $D=3$ features and $D=2$ features respectively -- $X$ has $D=216$ features. Thus for any $0 <\alpha < 1$, it is likely that the product of 216 offset eigenvalues $\lambda_i+\alpha$ still falls below machine epsilon; i.e., the determinant of $\Sigma_k$ is still $0$.
+
+We therefore devised a second approximation to handle the case of the data $X$. It is based on the geometric intuition that the cluster Gaussians for $X$ have variances very near $0$ in most of the $D=216$ dimensions; this is because we already know from PCA that most of the data resides in or close to a three-dimensional subspace of feature space. Rather than trying to keep the Gaussians from becoming too narrow in any of the directions (the first approximation scheme), we simply approximated any variance very close to $0$ as exactly $0$. Approximation of a Gaussian in this way proceeds as follows: We first perform a spectral decomposition of the covariance matrix:
+\[ \Sigma_k = P \Lambda P^\top, \]
+where the columns of $P$ are the normalized eigenvectors of $\sigma_k$ and $\Lambda$ is a diagonal matrix of associated eigenvalues in descending order. Let $d$ be the smallest number such that
+\[ \frac{1}{\operatorname{tr}(\Sigma_k)}\sum_{i=1}^d \lambda_i \geq 0.98. \]
+That is, the first $d$ eigenvectors of $\Sigma_k$ are sufficient to capture at least 98\% of the variance in cluster $k$. We then approximate the $D=216$-dimensional Gaussian by a $d$-dimensional Gaussian whose covariance matrix is restricted to the $d$-dimensional subspace spanned by the first $d$ eigenvectors of $\Sigma_k$. The restricted covariance matrix $\tilde{\Sigma_k}$ has inverse
+\[ \tilde{\Sigma_k}^{-1} = P[:, :d] \operatorname{diag}\left(\frac{1}{\lambda_1},\ldots,\frac{1}{\lambda_d}\right) P[:, :d]^\top, \]
+and determinant
+\[ \operatorname{det}(\tilde{\Sigma_k}) = \prod_{i=1}^d \lambda_i. \]
+The approximate Gaussian is then
+\[ \mathcal{N}(x; \mu_k, \tilde{\Sigma_k}) = \frac{1}{(2\pi)^{\frac{d}{2}}\operatorname{det}(\tilde{\Sigma_k})^{\frac{1}{2}}}\exp\left[-\frac{1}{2}(x-\mu_k)^\top\tilde{\Sigma_k}^{-1}(x-\mu)\right]. \]
+This approximation was successful on the non-reduced data $X$. It should be noted that the low dimension $d$ is selected anew every time the Gaussian function is called.
+
+\subsection{Results}
+
+We fitted a GMM to the non-reduced data $X$, the reduced data $Z$ (three principal components), and the 2D data $Z_{2D}$ (two principal components). We used $K=6$ clusters for comparison to KMC (see ``part2-GMM-X.py'', ``part2-GMM-Z.py'', ``part2-GMM-Z2D.py'').
+
+We recorded various attributes of the clustered data that provided information about the cluster structure (Table \ref{GMM-table}). We also recorded the ``hard'' cluster membership of each data point; this is defined as
+\[ \operatorname{cluster}(x) = \argmax_{1\leq k\leq K} p_k(x). \]
+To visualize the clusters, we projected the data sets into two dimensions using the maps:
+\begin{align*}
+X &\rightarrow X W[:, :2] \\
+Z &\rightarrow Z[:, :2] \\
+Z_{2D} &\rightarrow Z_{2D}.
+\end{align*}
+we produced scatter plots of each of the three projected data sets with distinct colors assigned to each of the six clusters of points (Figures \ref{GMM-X}-\ref{GMM-Z2D}).
+
+Finally, as we did with KMC, we recorded the countries contained in each cluster. These lists can be found in the directories ``Clusters/GMM/X'', ``Clusters/GMM/Z'', and ``Clusters/GMM/Z2D''.
+
+\begin{table}
+\centering
+\begin{tabular}{|c|c|c|c|} \hline
+\quad & $X$ & $Z$ & $Z_{2D}$ \\ \hline
+iterations & 3 & 2 & 2 \\ \hline
+compressed var. & 0.6531 & 0.8456 & 0.8609 \\ \hline
+max intracluster dist. & 10.2077 & 1.1215 & 0.9673 \\ \hline
+min intercluster dist. & 7.1066 & 0.9772 & 0.7889 \\ \hline
+Dunn index & 0.6962 & 0.8713 & 0.8156 \\ \hline
+\end{tabular}
+\caption{\label{GMM-table} Various attributes of the clustered data resulting from GMM.}
+\end{table}
+
+\begin{figure}
+\centering
+\includegraphics[height=3in]{../Clusters/GMM/X/plot.png}
+\caption{\label{GMM-X} Plot of the data $X$ clustered with GMM and projected onto its first two principal components.}
+\end{figure}
+
+\begin{figure}
+\centering
+\includegraphics[height=3in]{../Clusters/GMM/Z/plot.png}
+\caption{\label{GMM-Z} Plot of the reduced data $Z$ clustered with KMC and projected onto its first two components.}
+\end{figure}
+
+\begin{figure}
+\centering
+\includegraphics[height=3in]{../Clusters/GMM/Z2D/plot.png}
+\caption{\label{GMM-Z2D} Plot of the 2D data $Z_{2D}$ clustered with KMC.}
+\end{figure}
+
+
+\section{Discussion}
+
+In the cases of both KMC and the GMM, the cluster structures of the reduced data $Z$ and the 2D data $Z_{2D}$ are very similar (Figures \ref{KMC-Z}-\ref{KMC-Z2D} and \ref{GMM-Z}-\ref{GMM-Z2D}). This was expected since $Z$ and $Z_{2D}$ differ by one extra dimension that carries only about 5\% of the variance present in the original data $X$. The main difference is the color assignments to the clusters. This difference stems from the random initialization of cluster means; this can lead to permutations of cluster labels (in our case, colors) for different runs of the algorithm.
+
+Clustering on $Z$ and $Z_{2D}$ produced better results than clustering on the non-reduced data $X$ in the cases of both KMC and GMM (Figures \ref{KMC-X} and \ref{GMM-X}). Clusters for data $X$ resemble those obtained for $Z$ but have blurrier boundaries and often overlap with one another. We believe the source of this blurriness in the cluster boundaries is the additional 213 dimensions present in the data $X$ as compared to $Z$; differences in clustering in the directions of these additional dimensions -- however small -- will be mixed and appear blurry when projected onto two dimensions for visualization. Cluster boundaries are especially blurry in the case of the GMM (Figure \ref{GMM-X}). Recall that this was the case for which we had to approximate the cluster Gaussians with low-dimensional ``degenerate'' Gaussians (Section \ref{section-errors}). Perhaps this dditional blurriness is due to our approximations, or perhaps our approximations were sufficient to run the code but failed to handle certain sensitivities in the clustering itself.
+
+The cluster attributes we recorded exhibit similar trends for both KMC and the GMM (Tables \ref{KMC-table} and \ref{GMM-table}). In both cases, max intracluster distance and min intercluster distance are significantly greater for $X$ than for $Z$ and $Z_{2D}$, which are comparable. We again believe that this is due to the additional 213 dimensions present in the non-reduced data $X$. We know from PCA that these extra dimensions account for only about 8\% percent of the variance in the data. But small distances in 213 dimensions can produce a large distance overall. We therefore believe that small differences in distance both within and between clusters fitted to $X$ lead to significant differences compared to the clusters fitted to $Z$ and $Z_{2D}$. This thought is corroborated by the result that the Dunn indeces for $X$, $Z$, and $Z_{2D}$ are all comparable; this indicates that the additional 213 dimensions in the data $X$ are not significant.
+
+Although KMC and the GMM produced comparable structures in some ways, it is clear that the GMM produced clearer clustering overall (compare for instance Figures \ref{KMC-Z} and \ref{GMM-Z}). This was to be expected as the GMM is a more adaptive model than KMC.
+
+Our most interesting finding lies in the interpretation of a cluster as a group of countries with similar childhood mortality rate patterns. We found that countries that are geographically near to one another tend to be clustered together and therefore tend to exhibit similar mortality rate trends. For example, consider the clusters produced with a GMM trained on $Z$ (Figure \ref{GMM-Z}). Here are some observations about each of the six clusters (referred to by color in Figure \ref{GMM-Z}):
+\begin{enumerate}
+\item Red: This cluster contains almost exclusively African countries including Niger, Nigeria, Mali, Liberia, Somalia, and Rwanda.
+\item Orange: This cluster contains mostly African and South Asian countries including Afghanistan, Pakistan, India, Nepal, Bhutan, Bangladesh, and Myanmar.
+\item Green: This cluster contains mostly Middle Eastern and South American countries including Saudi Arabia, Iraq, Isreal, Lebanon and Brazil, Ecuador, Colombia, Peru, and Chile.
+\item Brown: This cluster is a more diverse mixture but includes for example North Korea and South Korea as well as Iran, Kuwait, Oman, and Yemen.
+\item Blue: This cluster contains primarily eastern European countries including Russia, Romania, Bulgaria, Belarus, Maldova, Croatia, and Hungary but also includes some other countries such as Japan and the United States.
+\item Purple: This cluster consists almost entirely of northern European countries including Iceland, Ireland, the United Kingdom, Norway, Sweden, and Denmark. Interestingly, this cluster also includes Canada.
+\end{enumerate}
+The above clusters are ordered as they appear from left to right in the plotted clustered data (Figure \ref{GMM-Z}). This makes absolute sense; e.g., the red and orange clusters neighbor one another and both contain African countries. Similarly, the blue and purple clusters border one another and both contain European countries. Only the brown cluster appears below the green cluster, and perhaps this explains why the brown cluster is a hodgepodge of countries from various geographic locations. Interestingly, the plot (Figure \ref{GMM-Z}) displays a ``rainbow'' gradation of decreasing mortality rates from left to right; we considered this quite remarkable!
+
+We conclude that under-five childhood mortality rate trends tend to vary more by general geographic region (e.g., continent) than by individual country, and this well-anticipated conclusion leads us to believe that our implementations of dimensionality reduction and clustering were successful.
+
+\end{document}

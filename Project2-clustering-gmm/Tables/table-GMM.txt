@@ -1,0 +1,8 @@
+\begin{tabular}{|c|c|c|c|} \hline
+\quad & $X$ & $Z$ & $Z_{2D}$ \\ \hline
+iterations & 3 & 2 & 2 \\ \hline
+compressed var. & 0.6531 & 0.8456 & 0.8609 \\ \hline
+max intracluster dist. & 10.2077 & 1.1215 & 0.9673 \\ \hline
+min intercluster dist. & 7.1066 & 0.9772 & 0.7889 \\ \hline
+Dunn index & 0.6962 & 0.8713 & 0.8156 \\ \hline
+\end{tabular}

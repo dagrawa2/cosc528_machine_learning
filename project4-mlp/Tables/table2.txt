@@ -1,0 +1,7 @@
+\begin{tabular}{|c|c|c|} \hline
+Output Func. & Training Acc. & Valid. Acc. \\ \hline
+linear & 0.94 & 0.918 \\
+logistic & 0.963 & 0.941 \\
+softmax & 0.968 & 0.94 \\
+\hline
+\end{tabular}

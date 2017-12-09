@@ -1,0 +1,250 @@
+\documentclass[12pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath, amsfonts}
+\usepackage{graphicx}
+
+\newcommand{\Xtrain}{X_{\mbox{train}}}
+\newcommand{\ytrain}{y_{\mbox{train}}}
+\newcommand{\Xtest}{X_{\mbox{test}}}
+\newcommand{\ytest}{y_{\mbox{test}}}
+\newcommand{\Xtr}{X_{\mbox{tr}}}
+\newcommand{\ytr}{y_{\mbox{tr}}}
+\newcommand{\Xva}{X_{\mbox{va}}}
+\newcommand{\yva}{y_{\mbox{va}}}
+
+\newcommand{\sgn}{\operatorname{sgn}}
+\newcommand{\mis}{\operatorname{mis}}
+\newcommand{\crange}{c_{\mbox{range}}}
+\newcommand{\gamrange}{\gamma_{\mbox{range}}}
+
+\title{COSC 528 Project 5 Report \\
+Hyperparameter Selection for a Support Vector Machine Classifier}
+\author{Devanshu Agrawal}
+\date{December 8, 2017}
+
+\begin{document}
+\maketitle
+
+\section{Summary}
+
+For this project, we implemented a support vector machine classifier (SVC) with a radial basis function (RBF) kernel on three data sets from different domains. The model has two hyperparameters: $c$ -- the penalty of each misclassification -- and $\gamma$ -- which is inversely related to the ``radius'' of the RBF kernel. The objective of the project was to implement a grid search with cross-validation to find the hyperparameters $(c, \gamma)$ producing the best model.
+
+We used the python module Sci-Kit Learn to implement the SVC and the grid search with cross-validation. We wrote a script that starts with a coarse grid and iteratively refines the grid until model performance (namely, the validation accuracy) converges.
+
+We found that the optimal hyperparameters $(c, \gamma)$ were somewhat comparable for all three data sets, suggesting some huristic for an initial choice of hyperparameters. We also found some reason to believe that grid search with iterative refinement implements a regularization scheme behind the scenes.
+
+
+\section{Data Exploration and Preprocessing}
+
+We were interested in three data sets from different domains:
+\begin{enumerate}
+\item Data on the interaction of radar signals with electrons in the ionosphere.
+\item Data on the sound of vowels.
+\item Data from satellite images of different terrains.
+\end{enumerate}
+
+The ionosphere data has $351$ rows and $35$ columns. The first $34$ columns are features of radar pulses. The last column is a binary class label-- either ``b'' or ``g''. An instance (i.e., row) is classified as ``g'' if the pulse features indicate the presence of structure in the ionosphere and is classified ``b'' otherwise. We read the data into a pandas dataframe and converted it into a numpy array. We stored the first $34$ columns in an array $X$ and the last column in a 1D array $y$. We converted $y$ to an integer array by substituting every instance of ``b'' with $0$ and every ``g'' with $1$. We saved $X$ and $y$ to disk.
+
+The vowel data has $990$ rows and $14$ columns. We discarded the first $3$ columns as they were not vowel sound features and were irrelevant to the problem. Columns $4$-$13$ are various features of vowel sounds. The last column is the vowel sound class label for each instance; class labels range in value from $0$ to $10$. We read the data into a pandas dataframe and converted it into a numpy array. We stored columns $4$-$13$ in an array $X$ and the last column in a 1D array $y$. We saved $X$ and $y$ to disk.
+
+The satellite data has $6435$ rows (combining training and test data) and $37$ columns. The first $36$ columns are multi-spectral values of pixels in a $3\times 3$ neighborhood in an image. The last column is the terrain class label of the central pixel of each instance; class labels range in value from $1$ to $7$. There is no instance with class label $6$. The training and test data were provided in separate files. We read both sets into pandas dataframes and converted them into numpy arrays. For our project, we used a three-way split of the data (training-validation-test). Moreover, our implementation relies on a Sci-Kit Learn class called GridSearchCV (see Section \ref{implementation}), which randomly splits input data into training and validation sets automatically. For this reason, we decided to combine the training and test satellite data into a single data set. We stored the first $36$ columns in an array $X$ and the last column in a 1D array $y$. We saved $X$ and $y$ to disk.
+
+
+\section{Support Vector Machines}
+
+We would like to make some remarks on support vector machine classifiers. This is not intended to be a complete overview. We restrict the discussion to binary classification for simplicity.
+
+A support vector machine classifier (SVC) is a kernel-based method for classification. The method embeds data $X$ into a high-dimensional feature space $H$ with the hope that the embedded data $\phi(X)$ is approximately linearly separable. The method then fits a linear classifier to $\phi(X)$. More precisely, the SVC searches for a hyperplane in $H$ of codimension $1$ that maximizes its margin but also minimizes misclassification error. The trade-off between margin maximization and error minimization is controlled by a hyperparameter.
+
+An SVC takes the form of a quadratic optimization problem. The feature map $\phi$ appears in the formulation only in innner products of the form $\langle \phi(x), \phi(x^\prime)\rangle$. Therefore, implementing an SVC does not require an explicit choice of a feature map $\phi$ but only a function of the form
+\[ K(x, x^\prime) = \langle\phi(x), \phi(x^\prime)\rangle. \]
+Properties of the inner product restrict $K$ to have the structure of a kernel (symmetric and positive semidefinite).
+
+For a data set with class labels $-1$ and $1$, an SVC implements a model of the form
+\[ f(x; a,b) = \sgn\left(\sum_{i=1}^N a_i K(x_i, x)-b\right), \]
+where $x_1,\ldots,x_N$ are the training inputs. It can be shown that the parameters $a_1,\ldots,a_N$ and $b$ are learned through the minimization of a loss function of the form
+\[ L(a, b) = c \sum_{i=1}^N \mis(y_i, f(x_i; a,b)) + \sum_{i,j=1}^N a_i a_j K(x_i, x_j), \]
+where $\mis$ is the misclassification error function defined as
+\[ \mis(y, \hat{y}) =
+\begin{cases}
+0 & \mbox{ if } y=\hat{y} \\
+1 & \mbox{ otherwise.}
+\end{cases} \]
+Here $c>0$ is a hyperparameter that weights misclassification error; the loss $L$ assigns a penalty of $c$ for every misclassification. The second term is actually an $L_2$ regularizer: In the theory of reproducing kernel Hilbert spaces, the kernel $K$ is understood as the inverse metric. The second term is therefore the squared $L_2$ norm of the dual vector $a$ in the discretized reproducing kernel Hilbert space $H$. In this light, $\frac{1}{c}$ is the regularization hyperparameter or weight decay hyperparameter. This allows us to easily interpret $c$: Large values of $c$ correspond to weak regularization (small $\frac{1}{c}$) and therefore may lead to overfitting. Indeed, large values of $c$ mean high penalties for misclassification, which encourages the SVC to classify more of the training data ``correctly''. On the other hand, small values of $c$ correspond to strong regularization (large $\frac{1}{c}$) that can help with overfitting but could also lead to underfitting. Indeed, small values of $c$ mean low penalties for misclassification, which favors margin maximization over data fitting.
+
+For this project, we restrict ourselves to the Gaussian kernel or ``radial basis function'' (RBF) kernel
+\[ K(x, x^\prime) = e^{-\gamma(x-x^\prime)^2}, \]
+where $\gamma>0$ is a hyperparameter. Small $\gamma$ means the RBF has a large ``radius'' so that the support vectors have far-reaching influence in feature space. Large $\gamma$ have the opposite effect.
+
+
+\section{Hyperparameter Selection with Grid Search}
+
+Our goal is to find the set of hyperparameters $(c, \gamma)$ that produces the best RBF SVC on each of our three data sets. Our approach is to do a grid search.
+
+Let $\crange = \{c_1,c_2,\ldots,c_m\}$ and $\gamrange = \{\gamma_1,\gamma_2,\ldots,\gamma_n\}$ be some ranges of values of the hyperparameters $c$ and $\gamma$ respectively. Then define the Cartesian grid
+\[ G = \crange \times \gamrange. \]
+We train and validate an SVC for each $(c, \gamma)\in G$. We perform multiple training-validation splits for each $(c, \gamma)$ and record the mean validation accuracy for every combination of hyperparameters tested. We then let $(c_*, \gamma_*)$ to be the set of hyperparameters that resulted in the highest mean validation accuracy.
+
+We start the above process with a coarse grid. Once we find $(c_*, \gamma_*)$ -- say $(c_*, \gamma_*)=(c_i, \gamma_j)$ -- in this initial grid, then we define a finer grid on the region $[c_{i-1}, c_{i+1}]\times [\gamma_{j-1}, \gamma_{j+1}]$ and repeat the search. We iterate the procedure on grids of increasingly finer scale and smaller area until the optimal mean validation accuracy converges.
+
+
+\section{Implementation}
+\label{implementation}
+
+We used the Sci-Kit Learn python module (sklearn).
+
+Let $(X, y)$ be one of our three data sets. We used the train\_test\_split function from sklearn to randomly split the data into a training set $(\Xtrain, \ytrain)$ and test set $(\Xtest, \ytest)$. We used the StandardScaler class from sklearn to standardize the training set and test set using the mean and standard deviation of the training set.
+
+We implemented an SVC using the SVC class in sklearn with an RBF kernel. We performed hyperparameter selection using the GridSearchCV class in sklearn. This class takes as argument a classifier (in our case, an SVC), a grid of hyperparameters, and a cross-validator object. The initialized GridSearchCV object can then be fit to the input data $(\Xtrain, \ytrain)$. GridSearchCV uses the cross-validator to automatically randomly split the provided data $(\Xtrain, \ytrain)$ into a training set $(\Xtr, \ytr)$ and validation set $(\Xva, \yva)$. Because this split is encapsulated in GridSearchCV, then we cannot standardize the validation set $\Xva$ in terms of the mean and standard deviation of $\Xtr$. It is for this reason that we standardized the entire input $\Xtrain$ before passing it into GridSearchCV. We realize that this approach introduces bias into our model.
+
+We can also specify the number of training-validation splits over which the GridSearchCV should average performance metrics.
+
+After the GridSearchCV object completes model selection on the hyperparameter grid, the mean validation accuracies over all tested hyperparameter combinations can be accessed as an attribute of the object. The optimal hyperparameters (in the grid) as well as the mean validation accuracy given the optimal hyperparameters are also stored as attributes of the object. After model selection, GridSearchCV also automatically refits to the entire input ($\Xtrain, \ytrain)$ using the optimal hyperparameters $(c_*, \gamma_*)$ found in the grid; this is necessary for prediction since otherwise it is unclear which subset $(\Xtr, \ytr)$ should be used as the final training set. The newly fit GridsearchCV object can then be used for prediction on a test set as well as for calculating test accuracy given $(\Xtest, \ytest)$.
+
+
+\section{Results}
+
+We split each of the three data sets $(X, y)$ into a training set $(\Xtrain, \ytrain)$ and test set $(\Xtest, \ytest)$ with a $80:20$ ratio. We standardized both based on the mean and standard deviation of the training set (see Section \ref{implementation} for details). We specified GridSearchCV to split $(\Xtrain, \ytrain)$ into a training set $(\Xtr, \ytr)$ and validation set $(\Xva, \yva)$ again with a $80:20$ ratio. This means that $(\Xtr, \ytr)$, $(\Xva, \yva)$, and $(\Xtest, \ytest)$ are $64\%$, $16\%$, and $20\%$ of the original data. We chose these percentages because GridSearchCV automatically refits to the entire input $(\Xtrain, \ytrain)$ (i.e., concatenation of $(\Xtr, \ytr)$ and $(\Xva, \yva)$) before test prediction. Our percentages therefore guarantee that the training-validation and training-test ratios are both $80:20$. We recorded validation accuracies averaged over $5$ training-validation splits unless stated otherwise.
+
+\subsection{Ionosphere Data}
+
+We started with a logarithmic grid to determine the best orders of magnitude for $c$ and $\gamma$. We constructed the grid with the ranges
+\[ \crange = \gamrange = \{10^n\}_{n=-3}^3. \]
+We found the optimal hyperparameters in this grid to be $(c, \gamma) = (1, 0.1)$ with mean validation accuracy $0.95$. We therefore refined the grid with the ranges
+\begin{align*}
+\crange &= \{0.1,0.2,\ldots,0.9\} \cup \{1,2,\ldots,10\} \\
+\gamrange &= \{0.01,0.02,\ldots,0.09\} \cup \{0.1,0.2,\ldots,1\}.
+\end{align*}
+Observe that both sets of values range from one order of magnitude below to one order of magnitude above the optimal order found in the first grid. We found the optimal hyperparameters in this refined grid to be $(c, \gamma) = (0.2, 0.03)$ with optimal mean validation accuracy $0.95$. We observe that the optimal mean validation accuracy converged to $0.95$ with only one refinement. We conclude that the optimal set of hyperparameters is $(c_*, \gamma_*) = (0.2, 0.03)$. The optimal hyperparameters and optimal mean validation accuracy for each grid as well as test results are summarized in Table \ref{table-1}.
+
+\begin{table}
+\centering
+\begin{tabular}{|c|c|c|c|} \hline
+Refinement & $c$ & $\gamma$ & Accuracy \\ \hline
+0 &  1.0 &  0.1 & 0.95 \\
+1 &  0.2 &  0.03 & 0.95 \\
+test &  0.2 &  0.03 & 0.92958 \\
+\hline
+\end{tabular}
+\caption{\label{table-1} Optimal hyperparameters and optimal mean validation accuracy for each grid (initial and refined) as well as the optimal hyperparameters used for testing along with the test accuracy. Refinement refers to the number of times the initial grid was refined; ``test'' refers to prediction on the test set using the optimal hyperparameters from the finest grid.}
+\end{table}
+
+We were also interested to see how mean validation accuracy varied with the hyperparameters on each grid. For example, we wanted to check for any peaks of mean validation accuracy between grid points that were missed during the search. To this end, we created heat maps of validation accuracy for each grid (Figure \ref{figure-1}).
+
+\begin{figure}
+\centering
+\begin{tabular}{cc}
+\includegraphics[width=3in]{../Ionosphere/Plots/plot_1.png} &
+\includegraphics[width=3in]{../Ionosphere/Plots/plot_2.png}
+\end{tabular}
+\caption{\label{figure-1} Heat maps of the mean validation accuracy over each grid of hyperparameters (initial and refined).}
+\end{figure}
+
+
+\subsection{Vowel Data}
+
+We started with a logarithmic grid to determine the best orders of magnitude for $c$ and $\gamma$. We constructed the grid with the ranges
+\[ \crange = \gamrange = \{10^n\}_{n=-3}^3. \]
+We found that three iterations of refinement were needed for the mean validation accuracy to converge. The grids corresponding to the three refinements were the following:
+\begin{align*}
+\mbox{Refinement 1: } &\quad \\
+\crange &= \{1,2,\ldots,9\} \cup \{10,20,\ldots,100\} \\
+\gamrange &= \{0.01,0.02,\ldots,0.09\} \cup \{0.1,0.2,\ldots,1\} \\
+\mbox{Refinement 2: } &\quad \\
+\crange &= \{1,1.1,1.2,\ldots,2.9,3\} \\
+\gamrange &= \{0.1,0.11,0.12,\ldots,0.29,0.3\} \\
+\mbox{Refinement 3: } &\quad \\
+\crange &= \{1,1.1,1.2,\ldots,2.9,3\} \\
+\gamrange &= \{0.16,0.161,0.162,\ldots,0.179,0.18\}.
+\end{align*}
+The optimal hyperparameters and optimal mean validation accuracy for each grid as well as test results are summarized in Table \ref{table-2}.
+
+\begin{table}
+\centering
+\begin{tabular}{|c|c|c|c|} \hline
+Refinement & $c$ & $\gamma$ & Accuracy \\ \hline
+0 &  10.0 &  0.1 & 0.9725 \\
+1 &  2.0 &  0.2 & 0.975 \\
+2 &  2.0 &  0.17 & 0.9775 \\
+3 &  2.0 &  0.169 & 0.9775 \\
+test &  2.0 &  0.169 & 0.9798 \\
+\hline
+\end{tabular}
+\caption{\label{table-2} Optimal hyperparameters and optimal mean validation accuracy for each grid (initial and refined) as well as the optimal hyperparameters used for testing along with the test accuracy. Refinement refers to the number of times the initial grid was refined; ``test'' refers to prediction on the test set using the optimal hyperparameters from the finest grid.}
+\end{table}
+
+We were also interested to see how mean validation accuracy varied with the hyperparameters on each grid. For example, we wanted to check for any peaks of mean validation accuracy between grid points that were missed during the search. To this end, we created heat maps of validation accuracy for each grid (Figure \ref{figure-2}).
+
+\begin{figure}
+\centering
+\begin{tabular}{cc}
+\includegraphics[width=3in]{../Vowel_context/Plots/plot_1.png} & 
+\includegraphics[width=3in]{../Vowel_context/Plots/plot_2.png} \\
+\includegraphics[width=3in]{../Vowel_context/Plots/plot_3.png} & 
+\includegraphics[width=3in]{../Vowel_context/Plots/plot_4.png}
+\end{tabular}
+\caption{\label{figure-2} Heat maps of the mean validation accuracy over each grid of hyperparameters (initial and refined).}
+\end{figure}
+
+
+\subsection{Satellite Data}
+
+The satellite data has over $6$ times the number of instances and over $3$ times the number of features as the vowel data. As a result, we experienced very long execution times for our script applied to the satellite data. We decided to average performance over only $2$ training-validation splits instead of $5$ to speed up execution time.
+
+We started with a logarithmic grid to determine the best orders of magnitude for $c$ and $\gamma$. We constructed the grid with the ranges
+\[ \crange = \gamrange = \{10^n\}_{n=-3}^3. \]
+We found that three iterations of refinement were needed for the mean validation accuracy to converge. The grids corresponding to the three refinements were the following:
+\begin{align*}
+\mbox{Refinement 1: } &\quad \\
+\crange &= \{1,2,\ldots,9\} \cup \{10,20,\ldots,100\} \\
+\gamrange &= \{0.01,0.02,\ldots,0.09\} \cup \{0.1,0.2,\ldots,1\} \\
+\mbox{Refinement 2: } &\quad \\
+\crange &= \{5,5.1,5.2,\ldots,6.9,7\} \\
+\gamrange &= \{0.09,0.091,0.092,\ldots,0.109,0.11\} \\
+\mbox{Refinement 3: } &\quad \\
+\crange &= \{5.7,5.71,5.72,\ldots,5.89,5.9\} \\
+\gamrange &= \{0.098,0.0981,0.0982,\ldots,0.09999,0.1\}.
+\end{align*}
+The optimal hyperparameters and optimal mean validation accuracy for each grid as well as test results are summarized in Table \ref{table-3}.
+
+\begin{table}
+\centering
+\begin{tabular}{|c|c|c|c|} \hline
+Refinement & $c$ & $\gamma$ & Accuracy \\ \hline
+0 &  10.0 &  0.1 & 0.92621 \\
+1 &  6.0 &  0.1 & 0.93204 \\
+2 &  5.8 &  0.099 & 0.93301 \\
+3 &  5.7 &  0.0992 & 0.93301 \\
+test &  5.7 &  0.0992 & 0.92618 \\
+\hline
+\end{tabular}
+\caption{\label{table-3} Optimal hyperparameters and optimal mean validation accuracy for each grid (initial and refined) as well as the optimal hyperparameters used for testing along with the test accuracy. Refinement refers to the number of times the initial grid was refined; ``test'' refers to prediction on the test set using the optimal hyperparameters from the finest grid.}
+\end{table}
+
+We were also interested to see how mean validation accuracy varied with the hyperparameters on each grid. For example, we wanted to check for any peaks of mean validation accuracy between grid points that were missed during the search. To this end, we created heat maps of validation accuracy for each grid (Figure \ref{figure-3}).
+
+\begin{figure}
+\centering
+\begin{tabular}{cc}
+\includegraphics[width=3in]{../Sat/Plots/plot_1.png} & 
+\includegraphics[width=3in]{../Sat/Plots/plot_2.png} \\
+\includegraphics[width=3in]{../Sat/Plots/plot_3.png} & 
+\includegraphics[width=3in]{../Sat/Plots/plot_4.png}
+\end{tabular}
+\caption{\label{figure-3} Heat maps of the mean validation accuracy over each grid of hyperparameters (initial and refined).}
+\end{figure}
+
+
+\section{Discussion}
+
+We remind readers that we could not standardize the validation set $\Xva$ in terms of the training set $\Xtr$ since GridSearchCV automates a random training-validation split of the input $\Xtrain$. The best that we could do was to standardize $\Xtrain$ before passing it to GridSearchCV. But we did standardize the test set $\Xtest$ in terms of $\Xtrain$. We understand that our method of standardization could have introduced bias into our model. Nevertheless, we found that in the cases of all three data sets, the test accuracy was comparable to the final validation accuracy (Tables \ref{table-1}-\ref{table-3}). Indeed, in the case of vowel data, the test accuracy exceeded the final validation accuracy. So, despite the possible bias present in our model, our SVC was able to generalize fairly well to unseen data.
+
+In the cases of vowel data and satellite data, the optimal values of $c$ and $\gamma$ were on the orders of $1$ and $0.1$ respectively. In the case of ionosphere data, the optimal values were just one order less-- $0.1$ and $0.01$ respectively. We achieved these ranges of orders over three different data sets. This suggests a general range in which initial guesses at the values of $c$ and $\gamma$ should be made. For example, we can have some confidence that the optimal value of $c$ for any data set is unlikely to be greater than $100$ or that $\gamma$ will be over $10$.
+
+Furthermore, in the initial logarithmic grid used for all three data sets, we found the optimal value for $\gamma$ to be $0.1$. Based on the heat maps, the value of $c$ is not very sensitive given $\gamma=0.1$ (Figures \ref{figure-1}-\ref{figure-3}). This again suggests a general huristic that could be applied to grid search for any data set. It also suggests that a precise value for $\gamma$ is more critical than a precise value for $c$.
+
+In the initial logarithmic grid for the ionosphere data, we observe a bright spot at $(c, \gamma) = (1, 0.01)$ (Figure \ref{figure-1}). But our search instead selected $(c, \gamma) = (1, 0.1)$, which is contained in a larger patch of brightness. This demonstrates how a coarse grid helps to avoid sharp peaks of performance in hyperparameter space and therefore helps to avoid unstable models. Hyperparameter selection via grid search with refinement could therefore be including a simple regularization scheme.
+
+We finally note that hyperparameter selection with grid search is slow. This became evident to us when we applied GridSearchCV to the satellite data, which is significantly larger than the ionosphere data and vowel data. As future work, we plan to explore strategies to scale grid search methods to larger data sets. We also plan to extend GridSearchCV to allow standardization of the validation set in terms of the training set.
+
+\end{document}

@@ -1,0 +1,399 @@
+\documentclass[12pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath, amsfonts}
+\usepackage{graphicx}
+
+\newcommand{\eps}{\epsilon}
+\newcommand{\Xtrain}{X_{\mbox{train}}}
+\newcommand{\ytrain}{y_{\mbox{train}}}
+\newcommand{\Xtest}{X_{\mbox{test}}}
+\newcommand{\ytest}{y_{\mbox{test}}}
+\newcommand{\Xtr}{X_{\mbox{tr}}}
+\newcommand{\ytr}{y_{\mbox{tr}}}
+\newcommand{\Xva}{X_{\mbox{va}}}
+\newcommand{\yva}{y_{\mbox{va}}}
+\newcommand{\Ztr}{Z_{\mbox{tr}}}
+\newcommand{\Zva}{Z_{\mbox{va}}}
+\newcommand{\mutr}{\mu_{\mbox{tr}}}
+
+\title{COSC 528 Project 3 Report \\
+KNN and Decision Tree Classification on Breast Cancer Data}
+\author{Devanshu Agrawal}
+\date{November 5, 2017}
+
+\begin{document}
+\maketitle
+
+\section{Summary}
+
+The goal of this project was to train a $K$-nearest neighbors (KNN) classifier and a decision tree (DT) classifier to predict the classification of breast tumor samples as either benign or malignant given nine other features of the samples. For this purpose, we used the ``breast-cancer-wisconsin'' data set. For both the KNN classifier and the DT classifier, we also tested if principal components analysis (PCA) could be used to reduce the dimensionality of the training data without sacrificing model performance.
+
+We ran a number of cross-validation experiments to select the best model hyperparameters for both classifiers. We computed several metrics such as accuracy based on confusion matrices to evaluate the classification performance of our models. Our models and experiments were all implemented in python 2.7 with the aid of useful libraries such as numpy.
+
+We found that between the KNN classifier and DT classifier with and without PCA, the KNN classifier without PCA exhibited the best performance on testing data. The DT classifier without PCA also performed well and was only slightly less accurate than the KNN classifier. Incorporation of PCA led to poorer performance-- especially in the case of the DT classifier. We concluded from this that the data occupies most of the dimensions of its feature space. Finally, we found the DT classifier to be more interpretable than the KNN classifier and noted that the DT classifier is often able to make correct predictions based on only a fraction of the features of the test input. We therefore concluded that the DT classifier without PCA is the best model for the problem at hand as it sacrifices a bit of accuracy in exchange for interpretability and robustness to incomplete information.
+
+
+\section{Data Exploration and Preprocessing}
+
+The data contains the following columns:
+\begin{enumerate}
+\item Sample code number
+\item Clump thickness
+\item Uniformity of cell size
+\item Uniformity of cell shape
+\item Marginal adhesion
+\item Single epithelial cell size
+\item Bare nuclei
+\item Bland chromatin
+\item Normal nucleoli
+\item Mitoses
+\item Class (benign or malignant)
+\end{enumerate}
+The data contains $699$ rows; each row is an instance of a sample identified by its unique sample code number.
+
+We read the .csv data into a pandas dataframe. We deleted the ``sample code number'' column as it is useless for generalization. Every feature takes integer values ranging from $1$ to $10$. The ``bare nuclei'' feature had $16$ missing values. We imputed these missing values with the average of all other values for the ``bare nuclei'' feature; the imputed value was a non-integer floating point number, and we did not round it to an integer as this would introduce bias into the data.
+
+We converted the pandas data frame into a numpy array. We split the array into two: The first array $X$ comprises the $9$ feature columns and has dimension $699\times 9$. The second array $y$ is the last column and is a vector of dimension $699$. The vector $y$ contains class labels-- $2$ for benign and $4$ for malignant. We transformed these labels to $0$ and $1$ respectively for later convenience (see ``preprocessing.py'').
+
+In preparation for training and testing, we randomly split the instances (rows) of the data $(X, y)$ into a training set $(\Xtrain, \ytrain)$ and a testing set $(\Xtest, \ytest)$; the training set comprises about $80\%$ of the data instances (see ``train-test.py''). We saved all arrays to disk (see ``Arrays/'').
+
+\section{Part 1: KNN Classifier}
+
+\subsection{Implementation}
+
+We implemented a KNN classifier as a class (see ``algos.py''). Initialization of an instance of a KNN classifier requires the specification of the hyperparameter $K$ (see below). The ``train'' method simply stores the given training data as class attributes. The ``predict'' method then takes a test input $x$ and computes its (Euclidean) distance to every training point. These distances are sorted in non-descending order, and the training points corresponding to the $K$ smallest distances are gathered. The predicted output for $x$ is then the average class label over the $K$ training points.
+
+Our implementation relies on the fact that the problem at hand is a binary classification problem. Since we transformed the class labels to $0$ and $1$ with $1$ corresponding to ``malignant'', then the predicted output given a test point $x$ can be interpreted as the probability that instance $x$ implies malignancy. For validation purposes, we round these probabilities to hard class labels; a probability greater than $0.5$ is rounded to $1$, and a probability less than $0.5$ is rounded to $0$. A probability of exactly $0.5$ is rounded to $0$ or to $1$ randomly.
+
+\subsection{Results without PCA}
+
+We used cross validation to select the best value for the number of nearest neighbors $K$ (see ``part1.py''). We tested the values $2-8$, $16$, and $32$ for $K$. For each of these $K$, We randomly split the training set $(\Xtrain, \ytrain)$ into a smaller training subset $(\Xtr, \ytr)$ and a validation set $(\Xva, \yva)$ with $(\Xtr, \ytr)$ containing about $80\%$ of the training instances. We performed this random split $20$ times. For each of these $20$ splits, we initialized a KNN classifier with hyperparameter $K$ and trained it on $(\Xtr, \ytr)$. We used the trained KNN classifier to predict the class labels on the validation set $\Xva$, and we compared the predictions to the ``true'' class labels $\yva$; in particular, we computed the prediction accuracy.
+
+We therefore obtained $20$ accuracy measures for each value of $K$ that we tested. We computed and plotted the mean accuracy and its standard deviation of the KNN classifier for each value of $K$ (Figure \ref{part1}). Larger values of $K$ do not seem to produce significantly different (mean) accuracies. The model variance -- as captured by the standard deviation of accuracy -- does not show a significant trend with $K$ either. But if we were to select one value for $K$, then we would select $K=4$ as it resulted in the greatest accuracy (accuracy = $0.970\pm 0.014$).
+
+\begin{figure}
+\centering
+\includegraphics[height=3in]{../Plots/part1.png}
+\caption{\label{part1} Accuracy of a KNN classifier averaged over $20$ validation sets for various values of $K$. The solid curve represents the mean accuracy, and the dashed curves represent unit standard deviations from the mean.}
+\end{figure}
+
+We therefore selected the model with hyperparameter $K=4$. We trained a KNN classifier on the training set $(\Xtrain, \ytrain)$ and tested it on $(\Xtest, \ytest)$. We obtained the following confusion matrix on the testing set:
+\[ \begin{bmatrix}
+82 & 4 \\
+1 & 53
+\end{bmatrix} \]
+We computed additional metrics from this confusion matrix (Table \ref{part1-table}).
+
+\begin{table}
+\centering
+\begin{tabular}{|c|c|} \hline
+Metric & Value \\ \hline
+Accuracy & 0.964 \\
+Recall & 0.981 \\
+Precision & 0.93 \\
+Specificity & 0.953 \\
+F-score & 0.477 \\ \hline
+\end{tabular}
+\caption{\label{part1-table} Additional metrics of a KNN classifier with $K=4$ on the testing set.}
+\end{table}
+
+
+\subsection{Results with PCA}
+
+We repeated the above experiment with data whose dimensionality was reduced with PCA. We randomly split $(\Xtrain, \ytrain)$ into $(\Xtr, \ytr)$ and $(\Xva, \yva)$ $20$ times for each value of $K$ as before. But after each split, we performed PCA on $\Xtr$. Specifically, we computed the column means $\mutr$ of $\Xtr$, and we performed a singular value decomposition of the centered training subset in standard fashion:
+\[ \Xtr-\mutr = U S V^\top. \]
+We selected the first $d$ columns of $V$ as our principal components, where $d$ is the smallest number of components needed to capture at least $90\%$ of the variance in $\Xtr-\mutr$; note that $d$ is in general stochastic since $\Xtr$ is selected as a random subset of $\Xtrain$. We collect the first $d$ principal components into a projection matrix $W$, and we then construct the reduced data
+\begin{align*}
+\Ztr &= (\Xtr-\mutr)W \\
+\Zva &= (\Xva-\mutr)W.
+\end{align*}
+For each value of $K$ and each of the $20$ splits of the training set into $(\Xtr, \ytr)$ and $(\Xva, \yva)$, we initialized a KNN classifier with hyperparameter $K$ and trained it on the reduced data $(\Ztr, \ytr)$ and evaluated it on $(\Zva, \yva)$. We computed and collected accuracies as before.
+
+The accuracy as a function of $K$ exhibits a similar trend as compared to the results without PCA (Figure \ref{part1-pca}); increasing the value of $K$ does not have a dramatic impact on accuracy. But we do observe that the mean accuracy is lower with PCA as compared to without PCA. For example, accuracy is still greatest at $K=4$ (accuracy = $0.959\pm 0.23$), but this value is smaller than the accuracy at $K=4$ without PCA. Moreover, the standard deviation is greater at $K=4$ with PCA as compared to without PCA.
+
+\begin{figure}
+\centering
+\includegraphics[height=3in]{../Plots/part1-pca.png}
+\caption{\label{part1-pca} Accuracy of a KNN classifier trained on PCA-reduced data and averaged over $20$ validation sets for various values of $K$. The solid curve represents the mean accuracy, and the dashed curves represent unit standard deviations from the mean.}
+\end{figure}
+
+We selected the model with hyperparameter $K=4$ as before and also as indicated by the obtained accuracies. We trained the selected KNN classifier on the entire training set $(\Xtrain, \ytrain)$ and tested it on $(\Xtest, \ytest)$. We obtained the following confusion matrix on the testing set:
+\[ \begin{bmatrix}
+83 & 3 \\
+2 & 52
+\end{bmatrix} \]
+This confusion matrix with PCA is comparable to the confusion matrix obtained without PCA; both indicate $5$ misclassifications. We computed additional metrics from this confusion matrix (Table \ref{part1-pca-table}). We observe that the recall is lower with PCA but that the precision is higher with PCA. This means that while a greater percentage of positive diagnoses was correct, there were also more malignant samples that were incorrectly classified as benign. This is not a good trade-off.
+
+\begin{table}
+\begin{tabular}{|c|c|} \hline
+Metric & Value \\ \hline
+Accuracy & 0.964 \\
+Recall & 0.963 \\
+Precision & 0.945 \\
+Specificity & 0.965 \\
+F-score & 0.477 \\ \hline
+\end{tabular}
+\caption{\label{part1-pca-table} Additional metrics of a KNN classifier with $K=4$ and trained on PCA-reduced data on the testing set.}
+\end{table}
+
+Finally, we also recorded the number of principal components that were used to construct the projection matrix $W$ after every training-validation split. We found that in every instance, the first $5$ components were used to reduce the data. This is about half the dimensionality of the original data. Therefore, even though PCA resulted in slightly poorer metrics, it also requires less feature information.
+
+
+\section{Part 2: DT Classifier}
+
+\subsection{Implementation}
+
+We implemented a DT classifier as a class (see ``algos.py''). We used the NetworkX python module to help build the tree architecture; this module provides a simple interface to work with tree nodes as dictionaries of attributes. The DT classifier algorithm itself is of course written from scratch.
+
+Initialization of an instance of the DT classifier class requires the specification of three hyperparameters:
+\begin{enumerate}
+\item $K$: the maximum allowed depth of the tree.
+\item $\eps$: the impurity threshold below which a node is considered ``pure''.
+\item $I$: the impurity measure function; one of ``entropy'', ``gini'', and ``misclassification error''.
+\end{enumerate}
+A DT classifier initially has one node; more nodes are added during training.
+
+The ``train''  method trains and builds the tree given training data $D$. The training algorithm loops over tree depth up to the maximum allowed depth $K$. At each depth, the algorithm loops over all newly added child nodes; let $N$ be such a node. To this node is associated a subset $D_N$ of the training data $D$; we describe how such data subsets are constructed below. If the impurity $I(N)$ of the node $N$ is below the threshold $\eps$ (i.e., most instances in $D_N$ belong to the same class) or if the maximum depth $K$ is reached, then $N$ is converted to a leaf node and is assigned a probability $p$ equalling the proportion of instances in $D_N$ belonging to class $1$. If this condition fails, then the algorithm enters into a process to construct two children for $N$: This process loops over every feature $F$ of the data $D_N$. For each feature, the process lists and sorts the unique values that $F$ attains in $D_N$. For every midpoint between consecutive values in this list, the data $D_N$ is split into two subsets-- one in which $F$ is less than the splitting point and another in which $F$ is greater than the splitting point. For every such feature $F$ and splitting point, the average impurity of the two data subsets is computed. The goal is to find the split that minimizes impurity and therefore maximizes information gain. Once the optimal feature $F$ and splitting point $s$ are found, then node $N$ is assigned the condition $F > s$. Node $N$ is assigned two children-- one along a ``true'' branch and another along a ``false'' branch; each child is assigned the subset of data from $D_N$ corresponding to whether the condition $F > s$ is true or false. The construction of the tree proceeds until no new child nodes are introduced.
+
+The ``predict'' method takes a test point $x$ and follows the path in the tree corresponding to the conditions that hold for the features of $x$. The leaf of this path contains a probability for $x$ to be labeled as class $1$. These probabilities are then thresholded to hard class labels in the same manner as with the KNN classifier.
+
+\subsection{Results without PCA}
+
+We used cross validation to select the best hyperparameters $K$, $\eps$, and $I$ just as we did in the case of KNN classification (see the files ``part2-*.py''. We started with an impurity threshold of $\eps=0.01$. Then for each impurity measure $I$ (entropy, gini, and misclassification) and each value of $K$ of interest ($1-8$, $16$, and $32$), we randomly split the training set $(\Xtrain, \ytrain)$ into a training subset $(\Xtr, \ytr)$ ($80\%$) and a validation set $(\Xva, \yva)$ $20$ times. We initialized a DT classifier with the appropriate hyperparameters, trained it on $(\Xtr, \ytr)$, and evaluated it on $(\Xva, \yva)$. We recorded the prediction accuracies on the validation set just as before.
+
+It is possible that a tree never grows to the maximum depth $K$; this happens when all child nodes are sufficiently pure to be converted into leaf nodes before a depth of $K$ is reached. We therefore recorded for every set of hyperparameters tested and for every training-validation split the actual depth realized by the DT classifier.
+
+We computed the mean accuracy along with its standard deviation for each impurity measure $I$ and each value of $K$; we also computed the average realized depth for each value of $K$ (Figures \ref{part2-K-entropy}-\ref{part2-K-mis}). For all three impurity measures, the realized depth plateaus at about $5$. This means that a depth of more than $5-6$ is unnecessary. All three impurity measures achieve high accuracies, though not as high as did the KNN classifier. Entropy achieved its highest accuracy at a maximum depth of about $6$ (which corresponds to a realized depth of $5$). Gini and misclassification achieved greatest accuracy at a depth of around $4$. A final observation to be made is that the standard deviation decreases up to a depth of about $5$. This means that more depth helps the model to be more stable.
+
+\begin{figure}
+\centering
+\includegraphics[height=3in]{../Plots/part2-K-entropy.png}
+
+\includegraphics[height=3in]{../Plots/part2-K-entropy-depth.png}
+\caption{\label{part2-K-entropy} Accuracy (top) and realized depth (bottom) of a DT classifier with impurity measure ``entropy'' and threshold $\eps=0.01$ averaged over $20$ validation sets for various values of $K$. The dashed curves (top) represent unit standard deviations from the mean accuracy.}
+\end{figure}
+
+\begin{figure}
+\centering
+\includegraphics[height=3in]{../Plots/part2-K-gini.png}
+
+\includegraphics[height=3in]{../Plots/part2-K-gini-depth.png}
+\caption{\label{part2-K-gini} Accuracy (top) and realized depth (bottom) of a DT classifier with impurity measure ``gini'' and threshold $\eps=0.01$ averaged over $20$ validation sets for various values of $K$. The dashed curves (top) represent unit standard deviations from the mean accuracy.}
+\end{figure}
+
+\begin{figure}
+\centering
+\includegraphics[height=3in]{../Plots/part2-K-mis.png}
+
+\includegraphics[height=3in]{../Plots/part2-K-mis-depth.png}
+\caption{\label{part2-K-mis} Accuracy (top) and realized depth (bottom) of a DT classifier with impurity measure ``misclassification'' and threshold $\eps=0.01$ averaged over $20$ validation sets for various values of $K$. The dashed curves (top) represent unit standard deviations from the mean accuracy.}
+\end{figure}
+
+Since all three impurity measures achieved high accuracies with a realized depth of about $5$, then we select $K=5$ as the best value for the maximum depth. Since the choice of impurity measure did not significantly influence results, then we selected entropy as the impurity measure. Our choice was motivated by the theoretical significance of entropy; since entropy is a direct measure of information, then its use lets us interpret a DT classifier as organizing features in the order of maximum information gain.
+
+Using a maximum depth of $K=5$ and  entropy as the impurity measure, we tested a DT classifier for various values of the impurity threshold $\eps$: $0$, $0.001$, $0.01$, and $0.1$. As before, we collected accuracy measures for each threshold value over $20$ training-validation splits. We computed the mean accuracy and its standard deviation for each threshold value (Figure \ref{part2-eps-entropy}). We see that accuracy does not change significantly with varying $\eps$. We take this to mean that the DT classifier is able to partition the data into subsets that have very pure class labels.
+
+\begin{figure}
+\centering
+\includegraphics[height=3in]{../Plots/part2-eps-entropy.png}
+\caption{\label{part2-eps-entropy} Accuracy of a DT classifier with $K=5$ and impurity measure ``entropy'' averaged over $20$ validation sets for various values of the impurity threshold $\eps$.}
+\end{figure}
+
+We therefore select the model with a maximum allowed depth of $K=5$, an impurity measure $I$ given as entropy, and an impurity threshold of $\eps=0.01$ (the value with which we selected $K$ and $I$ above). We trained this DT classifier on the entire training set $(\Xtrain, \ytrain)$ and tested it on the testing set $(\Xtest, \ytest)$. The model realized the maximum depth of $5$. We obtained the following confusion matrix on the testing set:
+\[ \begin{bmatrix}
+82 & 4 \\
+4 & 50
+\end{bmatrix} \]
+We see that the DT classifier misclassified $8$ instances-- $3$ more as compared to the KNN classifier. We calculated additional metrics from the confusion matrix (Table \ref{part2-table}).
+
+\begin{table}
+\centering
+\begin{tabular}{|c|c|} \hline
+Metric & Value \\ \hline
+Accuracy & 0.943 \\
+Recall & 0.926 \\
+Precision & 0.926 \\
+Specificity & 0.953 \\
+F-score & 0.463 \\ \hline
+\end{tabular}
+\caption{\label{part2-table} Various metrics of the performance of a DT classifier with $K=5$, $\eps=0.0$, and $I=$ ``entropy'' on the testing set.}
+\end{table}
+
+\subsection{Results with PCA}
+
+We repeated the above experiments but on training data whose dimensionality was reduced with PCA. The implementation is entirely analogous to how PCA was incorporated into the training of the KNN classifier, and hence we will not describe it again here. We found as before that five principal components were used; this is not a surprise as this result is independent of the classification model being trained. We assumed an impurity measure given by entropy and an impurity threshold of $\eps=0.01$ and tested the DT classifier for various values of $K$: $1-8$, $16$, and $32$. We calculated the mean realized depth and mean accuracy along with its standard deviation for each value of $K$ (Figure \ref{part2-pca-K-entropy}). We first note that the accuracies are poorer with PCA as compared to without PCA. Furthermore, the standard deviations are greater. We see that greatest accuracy is attained with a maximum allowed depth of $K=5$ (accuracy = $0.911\pm 0.054$). Indeed, the standard deviation at $K=5$ is $5$ percentage points; the model is therefore relatively unstable. On the other hand, the average realized depth plateaus to about $3.8$-- about one layer smaller as compared to without PCA. This is reasonable as PCA results in features that are in general linear combinations of the original features, and hence the nodes in the DT classifier trained with PCA represent more complex decisions. These more complex nodes allow the DT classifier to classify an input using fewer decisions.
+
+\begin{figure}
+\centering
+\includegraphics[height=3in]{../Plots/part2-pca-K-entropy.png}
+
+\includegraphics[height=3in]{../Plots/part2-pca-K-entropy-depth.png}
+\caption{\label{part2-pca-K-entropy} Accuracy (top) and realized depth (bottom) of a DT classifier trained on PCA-reduced data and with impurity measure ``entropy'' and threshold $\eps=0.01$ averaged over $20$ validation sets. The dashed curves (top) represent unit standard deviations from the mean accuracy.}
+\end{figure}
+
+We therefore select the maximum allowed depth $K=4$. We trained such a DT classifier on the entire training set $(\Xtrain, \ytrain)$ and tested it on $(\Xtest, \ytest)$. The DT classifier realized a depth of $3$-- two layers smaller than without PCA. Again, this simplification in the tree architecture comes at the cost of more complex conditions on the nodes. We obtained the following confusion matrix on the testing set:
+\[ \begin{bmatrix}
+84 & 2 \\
+34 & 20
+\end{bmatrix} \]
+This confusion matrix indicates that the PCA-reduced DT classifier does well at classifying benign tumors (first row) but is poor at classifying malignant tumors (second row). In particular, $34$ of the test instances were malignant tumors but were classified as benign. This type of error is highly significant given the application at hand. We calculated additional metrics from the confusion matrix (Table \ref{part2-pca-table}). The metrics reinforce our interpretation of the confusion matrix. We believe this poor performance is the result of model instability as indicated by the high standard deviation in model accuracy.
+
+\begin{table}
+\begin{tabular}{|c|c|} \hline
+Metric & Value \\ \hline
+Accuracy & 0.743 \\
+Recall & 0.37 \\
+Precision & 0.909 \\
+Specificity & 0.977 \\
+F-score & 0.263 \\ \hline
+\end{tabular}
+\caption{\label{part2-pca-table} Various metrics of the performance of a DT classifier trained on PCA-reduced data and with $K=4$, $\eps=0.0$, and $I=$ ``entropy'' on the testing set.}
+\end{table}
+
+
+\section{Discussion}
+
+The KNN classifier without PCA exhibited the best performance on the testing set; in particular, the KNN classifier performed better than the DT classifier. The fact that the KNN classifier performed well suggests that the topology of the data respects locality. But the slightly poorer performance of the DT classifier suggests that the geometry of the class structure of the data cannot be cleanly partitioned with hyperplanes parallel to the feature axes.
+
+Dimensionality reduction with PCA worsened performance in the cases of both the KNN classifier and the DT classifier. The decline in performance was sharp in the case of the DT classifier. For both classifiers, PCA resulted in significantly more malignant tumors being misclassified as benign. This type of error is more severe than misclassifying benign tumors as malignant. It is therefore ill-advised to reduce the dimensionality of the data to $90\%$ variance. One option would be to use more principal components to capture more variance in the data. But $5$ principal components are already needed to capture $90\%$ of the variance-- over half the dimensionality of the original data. It therefore appears that PCA offers little advantage for the problem at hand as the data seems to occupy most dimensions of its feature space.
+
+Although the KNN classifier performed better on the testing set than did the DT classifier, the latter model has the advantage of interpretability. We were unable to plot the decision tree but instead extracted the decision rules from the tree (see ``Rules.py''). The tree has a depth of $5$, but not all paths in the tree reach the full depth. In fact, the tree has only $10$ paths. The decision rules and class prediction for each path are listed in the appendix.
+
+Since we trained the DT classifier using entropy as the measure of impurity, then each feature node in the tree can be interpreted as the condition that provides the greatest information gain given the information already provided by its ancestor nodes. For example, we found that the root node of the tree carried the condition
+\[ \mbox{UniformityOfCellSize} \leq 3.5. \]
+We can therefore interpret this condition as the ``most important'' question to be asked when assessing the malignancy of a tumor-- at least out of all possible conditions of the form $\mbox{feature} \leq \mbox{value}$. Given that this condition holds, then the next most important question to be asked is
+\[ \mbox{ClumpThickness} > 8.5, \]
+and so on. We therefore have access to the ``logic'' of the DT classifier.
+
+The shortest paths in the decision tree are only $2$ feature nodes long. For example, if the conditions
+\[ \mbox{UniformityOfCellSize} \leq 3.5 \]
+\[ \mbox{ClumpThickness} > 8.5 \]
+hold, then the DT classifier classifies the input as class $1$ with probability $1.0$. This is remarkable as the model is able to conclude with confidence (as much as the data can allow) that a tumor is malignant based only on $2$ out of $9$ features. There are other paths in the tree with similar structure. This means that if we have a test point with incomplete information -- i.e., only a fraction of the features -- then in some cases, it is still possible to use the DT classifier to make strong predictions. This is in a sense ``fractional'' dimensionality reduction. We therefore recommend the DT classifier over the KNN classifier despite its slightly poorer performance on the testing set.
+
+
+\section{Appendix}
+
+\appendix
+\renewcommand{\thesection}{A\arabic{section}.  }
+
+\section{Decision Rules for the Test DT Classifier}
+
+We consider the DT classifier trained on $(\Xtest, \ytest)$ and for which the metrics in Table \ref{part2-table} were calculated. This decision tree has $10$ paths. Below, we list the conditions along each path as well as the corresponding class prediction.
+
+\textbf{Path 1:} \\
+Conditions:
+\begin{itemize}
+\item $\mbox{UniformityOfCellSize} \leq 3.5$
+\item \mbox{ClumpThickness} > 8.5
+\end{itemize}
+Prediction: $P(\mbox{class} 1) = 1.0$
+
+\[\quad\]
+
+\textbf{Path 2:} \\
+Conditions:
+\begin{itemize}
+\item \mbox{UniformityOfCellSize} > 3.5
+\item $\mbox{MarginalAdhesion} \leq 2.5$
+\end{itemize}
+Prediction: $P(\mbox{class} 1) = 1.0$
+
+\[\quad\]
+
+\textbf{Path 3:} \\
+Conditions:
+\begin{itemize}
+\item $\mbox{UniformityOfCellSize} \leq 3.5$
+\item $\mbox{ClumpThickness} \leq 8.5$
+\item \mbox{UniformityOfCellShape} > 4.5
+\end{itemize}
+Prediction: $P(\mbox{class} 1) = 1.0$
+
+\[\quad\]
+
+\textbf{Path 4:} \\
+Conditions:
+\begin{itemize}
+\item \mbox{UniformityOfCellSize} > 3.5
+\item \mbox{MarginalAdhesion} > 2.5
+\item $\mbox{SingleEpithelialCellSize} \leq 1.5$
+\end{itemize}
+Prediction: $P(\mbox{class} 1) = 1.0$
+
+\[\quad\]
+
+\textbf{Path 5:} \\
+Conditions:
+\begin{itemize}
+\item $\mbox{UniformityOfCellSize} \leq 3.5$
+\item $\mbox{ClumpThickness} \leq 8.5$
+\item $\mbox{UniformityOfCellShape} \leq 4.5$
+\item \mbox{Mitoses} > 7.5
+\end{itemize}
+Prediction: $P(\mbox{class} 1) = 1.0$
+
+\[\quad\]
+
+\textbf{Path 6:} \\
+Conditions:
+\begin{itemize}
+\item \mbox{UniformityOfCellSize} > 3.5
+\item \mbox{MarginalAdhesion} > 2.5
+\item \mbox{SingleEpithelialCellSize} > 1.5
+\item \mbox{BlandChromatin} > 9.5
+\end{itemize}
+Prediction: $P(\mbox{class} 1) = 1.0$
+
+\[\quad\]
+
+\textbf{Path 7:} \\
+Conditions:
+\begin{itemize}
+\item $\mbox{UniformityOfCellSize} \leq 3.5$
+\item $\mbox{ClumpThickness} \leq 8.5$
+\item $\mbox{UniformityOfCellShape} \leq 4.5$
+\item $\mbox{Mitoses} \leq 7.5$
+\item $\mbox{NormalNucleoli} \leq 9.0$
+\end{itemize}
+Prediction: $P(\mbox{class} 1) = 0.043$
+
+\[\quad\]
+
+\textbf{Path 8:} \\
+Conditions:
+\begin{itemize}
+\item $\mbox{UniformityOfCellSize} \leq 3.5$
+\item $\mbox{ClumpThickness} \leq 8.5$
+\item $\mbox{UniformityOfCellShape} \leq 4.5$
+\item $\mbox{Mitoses} \leq 7.5$
+\item \mbox{NormalNucleoli} > 9.0
+\end{itemize}
+Prediction: $P(\mbox{class} 1) = 0.0$
+
+\[\quad\]
+
+\textbf{Path 9:} \\
+Conditions:
+\begin{itemize}
+\item \mbox{UniformityOfCellSize} > 3.5
+\item \mbox{MarginalAdhesion} > 2.5
+\item \mbox{SingleEpithelialCellSize} > 1.5
+\item $\mbox{BlandChromatin} \leq 9.5$
+\item $\mbox{BareNuclei} \leq 9.5$
+\end{itemize}
+Prediction: $P(\mbox{class} 1) = 0.899$
+
+\[\quad\]
+
+\textbf{Path 10:} \\
+Conditions:
+\begin{itemize}
+\item \mbox{UniformityOfCellSize} > 3.5
+\item \mbox{MarginalAdhesion} > 2.5
+\item \mbox{SingleEpithelialCellSize} > 1.5
+\item $\mbox{BlandChromatin} \leq 9.5$
+\item \mbox{BareNuclei} > 9.5
+\end{itemize}
+Prediction: $P(\mbox{class} 1) = 1.0$
+
+\end{document}

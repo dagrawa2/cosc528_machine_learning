@@ -1,0 +1,39 @@
+training error:  0.0900318675961
+validation error:  0.153105562453
+
+Dropping feature "displacement"
+
+training error:  0.0986856329204
+validation error:  0.124065172513
+
+Dropping feature "cylinders"
+
+training error:  0.100070683962
+validation error:  0.124578200355
+
+Dropping feature "horsepower"
+
+training error:  0.108238276814
+validation error:  0.127689928535
+
+Dropping feature "origin"
+
+training error:  0.118719834792
+validation error:  0.126247865289
+
+Dropping feature "acceleration"
+
+training error:  0.127962645624
+validation error:  0.129899776226
+
+Dropping feature "model year"
+
+training error:  0.267107880822
+validation error:  0.268523418026
+
+Dropping feature "weight"
+
+training error:  0.974546379128
+validation error:  1.0171388791
+
+testing error (with only two features):  0.179133524504

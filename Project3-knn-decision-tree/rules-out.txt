@@ -1,0 +1,68 @@
+Path 1:
+UniformityOfCellSize <= 3.5
+ClumpThickness > 8.5
+P(class 1) = 1.0
+
+Path 2:
+UniformityOfCellSize > 3.5
+MarginalAdhesion <= 2.5
+P(class 1) = 1.0
+
+Path 3:
+UniformityOfCellSize <= 3.5
+ClumpThickness <= 8.5
+UniformityOfCellShape > 4.5
+P(class 1) = 1.0
+
+Path 4:
+UniformityOfCellSize > 3.5
+MarginalAdhesion > 2.5
+SingleEpithelialCellSize <= 1.5
+P(class 1) = 1.0
+
+Path 5:
+UniformityOfCellSize <= 3.5
+ClumpThickness <= 8.5
+UniformityOfCellShape <= 4.5
+Mitoses > 7.5
+P(class 1) = 1.0
+
+Path 6:
+UniformityOfCellSize > 3.5
+MarginalAdhesion > 2.5
+SingleEpithelialCellSize > 1.5
+BlandChromatin > 9.5
+P(class 1) = 1.0
+
+Path 7:
+UniformityOfCellSize <= 3.5
+ClumpThickness <= 8.5
+UniformityOfCellShape <= 4.5
+Mitoses <= 7.5
+NormalNucleoli <= 9.0
+P(class 1) = 0.043
+
+Path 8:
+UniformityOfCellSize <= 3.5
+ClumpThickness <= 8.5
+UniformityOfCellShape <= 4.5
+Mitoses <= 7.5
+NormalNucleoli > 9.0
+P(class 1) = 0.0
+
+Path 9:
+UniformityOfCellSize > 3.5
+MarginalAdhesion > 2.5
+SingleEpithelialCellSize > 1.5
+BlandChromatin <= 9.5
+BareNuclei <= 9.5
+P(class 1) = 0.899
+
+Path 10:
+UniformityOfCellSize > 3.5
+MarginalAdhesion > 2.5
+SingleEpithelialCellSize > 1.5
+BlandChromatin <= 9.5
+BareNuclei > 9.5
+P(class 1) = 1.0
+

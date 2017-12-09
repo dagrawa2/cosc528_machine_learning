@@ -1,0 +1,22 @@
+Degree =  1 :
+Training error:  0.177957098287
+Validation error:  0.172483164927
+
+
+Degree =  2 :
+Training error:  0.104770028812
+Validation error:  0.130559121743
+
+
+Degree =  3 :
+Training error:  0.0446475553001
+Validation error:  2.26507680826
+
+
+Degree =  4 :
+Training error:  3.53006122389e-16
+Validation error:  189.49472357
+
+
+Degree = 2:
+Testing error:  0.119404225475
